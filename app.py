@@ -31,7 +31,7 @@ MANUAL_AVG_DAU_CEILING = 9799                   # Change this to directly set AV
 if MANUAL_MAX_REGISTERED_USERS is not None:
     MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS
 else:
-    MAX_REGISTERED_USERS = 9688  # Default fallback
+    MAX_REGISTERED_USERS = 9896  # Default fallback
 
 # Calculate AVG_STICKINESS_TARGET based on the priority of manual overrides
 if MANUAL_AVG_DAU_CEILING is not None:
@@ -45,7 +45,7 @@ elif MANUAL_DAU_OVERRIDE is not None:
 else:
     # Priority 3: Default calculations
     AVG_STICKINESS_TARGET = 0.98  # Default stickiness
-    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)  # 9498 with defaults
+    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)  # 9799 with defaults
 
 DAILY_ENGAGEMENT_MULTIPLIER = 1.2
 
@@ -2500,7 +2500,7 @@ def traction_analytics():
     watches = ["1st (Sunrise Hour)", "2nd (Third Hour (The Trial))", "3rd (Sixth Hour (The Crucifixion))", "4th (Ninth Hour (The Sacrifice))", 
                "1st (Sunset Hour (The Burial/Resurrection))", "2nd (Third Hour of Night)", "3rd (Midnight)", "4th (Ninth Hour of Night)"]
     
-    base_engagement = np.array([1550, 1250, 1200, 1450, 1550, 1350, 1750, 1300]) 
+    base_engagement = np.array([1600, 1290, 1238, 1496, 1600, 1393, 1805, 1337]) 
     total = metrics['DAILY_ENGAGEMENT_TARGET']
     scaling = total / base_engagement.sum()
     engagement = np.round(base_engagement * scaling).astype(int)
