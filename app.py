@@ -2499,14 +2499,16 @@ def traction_analytics():
     st.subheader("Prayer Watch Engagement — Core Feature Usage")
     watches = ["1st (Sunrise Hour)", "2nd (Third Hour (The Trial))", "3rd (Sixth Hour (The Crucifixion))", "4th (Ninth Hour (The Sacrifice))", 
                "1st (Sunset Hour (The Burial/Resurrection))", "2nd (Third Hour of Night)", "3rd (Midnight)", "4th (Ninth Hour of Night)"]
+    # Original proportions (keep these fixed)
+    original_proportions = np.array([0.13596, 0.10965, 0.10526, 0.12719, 0.13596, 0.11842, 0.15351, 0.11404])
     
-    base_engagement = np.array([1600, 1290, 1238, 1496, 1600, 1393, 1805, 1337]) 
-    total = metrics['DAILY_ENGAGEMENT_TARGET']
-    scaling = total / base_engagement.sum()
-    engagement = np.round(base_engagement * scaling).astype(int)
-    per_user = total / metrics['AVG_DAU_STABLE'] 
+    # Calculate based on CURRENT AVG_DAU_CEILING (which may be manual)
+    CURRENT_AVG_DAU_CEILING = metrics['AVG_DAU_STABLE']  # From your get_live_metrics()
+    total = int(CURRENT_AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
+    engagement = np.round(original_proportions * total).astype(int)
+    per_user = total / CURRENT_AVG_DAU_CEILING 
     
-    st.info(f"**{metrics['AVG_DAU_STABLE']:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
+    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
     df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
     st.bar_chart(df_w)
     
