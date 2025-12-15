@@ -2516,15 +2516,15 @@ st.bar_chart(df_w)
     # --- Retention & K-Factor (Simulated) ---
 st.subheader("Cohort Retention (First 7 Months)")
 months = ["Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6", "Month 7"]
-    retention = [96, 96, 98, 98, 98, 98, 98]
-    df_r = pd.DataFrame({"Month": months, "Retention %": retention}).set_index("Month")
-    st.line_chart(df_r)
+retention = [96, 96, 98, 98, 98, 98, 98]
+df_r = pd.DataFrame({"Month": months, "Retention %": retention}).set_index("Month")
+st.line_chart(df_r)
 
-    st.subheader("Viral Coefficient (K-Factor)")
-    invites = 2.5
-    conv = 0.39
-    k = invites * conv
-    st.metric("K-Factor", f"{k:.2f}", help="Close to viral (1.0+)")
+st.subheader("Viral Coefficient (K-Factor)")
+invites = 2.5
+conv = 0.39
+k = invites * conv
+st.metric("K-Factor", f"{k:.2f}", help="Close to viral (1.0+)")
 
 
 # ==============================================================================
