@@ -51,7 +51,7 @@ DAILY_ENGAGEMENT_MULTIPLIER = 1.2
 
 # Other constants remain the same
 DAU_START_DATE_STR = "2025-05-16"
-DAU_END_DATE_STR = "2025-12-14"
+DAU_END_DATE_STR = "2025-12-15"
 
 # ===========================
 # 3. App Constants & Patterns
