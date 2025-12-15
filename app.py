@@ -2514,7 +2514,7 @@ df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
 st.bar_chart(df_w)
     
     # --- Retention & K-Factor (Simulated) ---
-    st.subheader("Cohort Retention (First 7 Months)")
+st.subheader("Cohort Retention (First 7 Months)")
     months = ["Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6", "Month 7"]
     retention = [96, 96, 98, 98, 98, 98, 98]
     df_r = pd.DataFrame({"Month": months, "Retention %": retention}).set_index("Month")
