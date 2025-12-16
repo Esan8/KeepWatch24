@@ -2475,11 +2475,28 @@ def traction_analytics():
 
     st.markdown("---")
     
-    # --- DAU Trend (Historical) - NOW DYNAMIC ---
+        # --- DAU Trend (Historical) - NOW DYNAMIC ---
     st.subheader("DAU Trend (Historical)")
     # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
     df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
-    st.line_chart(df_dau)
+    
+    # Create line chart with menu disabled
+    chart = st.line_chart(df_dau)
+    
+    # Use CSS to hide the menu options on hover
+    st.markdown("""
+    <style>
+        [data-testid="stElementToolbar"] {
+            display: none !important;
+        }
+        div[data-testid="stHoverMenu"] {
+            display: none !important;
+        }
+        .stPlotlyChart [data-modebar] {
+            display: none !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     
     # Show manual override status
     manual_status = []
