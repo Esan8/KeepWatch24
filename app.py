@@ -2491,7 +2491,7 @@ def traction_analytics():
         manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve last updated at 4:30 PM. Live DAU tracks this line.")
+        st.caption(f"Historical growth curve last updated at 8:10 PM. Live DAU tracks this line.")
     else:
         st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
