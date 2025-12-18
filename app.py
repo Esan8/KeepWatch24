@@ -2368,48 +2368,88 @@ def create_word_search(words, size=15):
 # 10. DYNAMIC METRICS & TRACTION ANALYTICS
 # ==============================================================================
 
-# REMOVE @st.cache_data decorator
-def generate_historical_dau_data(start_str, end_str, max_users):
-    """Generates the historical DAU data for the chart, dynamically adjusting to max_users."""
+def generate_historical_dau_data(start_str, end_str, max_users, manual_dau_ceiling=None):
+    """Generates the historical DAU data for the chart, dynamically adjusting to manual inputs."""
     start = pd.to_datetime(start_str)
     end = pd.to_datetime(end_str)
     dates = pd.date_range(start, end)
     
-    # 1. Growth Curve - now scales with max_users parameter
-    growth = np.minimum(np.arange(len(dates)) * (max_users / 180), max_users)
+    # Determine the target ceiling for the growth curve
+    if manual_dau_ceiling is not None:
+        # Use manual ceiling if provided
+        target_ceiling = manual_dau_ceiling
+    else:
+        # Calculate based on max_users and stickiness
+        target_ceiling = int(max_users * 0.98)  # Default stickiness of 98%
     
-    # 2. Stickiness and Noise
-    np.random.seed(42) # Ensure the trend shape is stable
-    stickiness = np.random.uniform(0.96, 0.98, len(dates)) 
+    # 1. Growth Curve - scales to the target ceiling
+    # The curve should reach near the target ceiling by the end date
+    days_count = len(dates)
+    growth = np.minimum(np.arange(days_count) * (target_ceiling / days_count) * 1.5, target_ceiling)
     
-    # 3. Simulate DAU and cap
-    dau = np.round(growth * stickiness + np.random.uniform(-80, 80, len(dates))).astype(int)
-    dau = np.maximum(0, np.minimum(dau, max_users))  # Cap at current max_users
+    # 2. Add some realistic fluctuations
+    np.random.seed(42)  # Keep the shape stable
+    noise = np.random.normal(0, target_ceiling * 0.02, days_count)  # 2% noise
+    
+    # 3. Generate DAU values
+    dau = np.round(growth + noise).astype(int)
+    dau = np.maximum(0, np.minimum(dau, target_ceiling))  # Cap at target ceiling
+    
+    # Ensure the final values approach the target ceiling
+    final_percentage = 0.95  # End at 95% of target
+    if days_count > 30:
+        dau[-30:] = np.round(np.linspace(dau[-30], target_ceiling * final_percentage, 30))
     
     df_dau = pd.DataFrame({"Date": dates, "DAU": dau}).set_index("Date")
     return df_dau
 
 def get_live_metrics():
-    """Calculates live metrics, centering the fluctuation around TODAY's historical DAU."""
+    """Calculates live metrics, incorporating all manual overrides."""
     
-    # Initialize stable metrics in session state if not present
+    # Use global manual override values
+    global MANUAL_MAX_REGISTERED_USERS, MANUAL_DAU_OVERRIDE, MANUAL_AVG_DAU_CEILING
+    
+    # Determine which values to use based on manual overrides
+    if MANUAL_MAX_REGISTERED_USERS is not None:
+        MAU = MANUAL_MAX_REGISTERED_USERS
+    else:
+        MAU = 9898  # Default fallback
+    
+    if MANUAL_AVG_DAU_CEILING is not None:
+        AVG_DAU = MANUAL_AVG_DAU_CEILING
+    elif MANUAL_DAU_OVERRIDE is not None:
+        # Calculate from DAU override
+        AVG_DAU = MANUAL_DAU_OVERRIDE
+    else:
+        # Default calculation
+        AVG_DAU = int(MAU * 0.98)  # 98% stickiness
+    
+    TARGET_ENGAGEMENT = int(AVG_DAU * DAILY_ENGAGEMENT_MULTIPLIER)
+    
+    # Store in session state for stability
     if 'MAU_TARGET' not in st.session_state:
-        st.session_state.MAU_TARGET = MAX_REGISTERED_USERS
-        st.session_state.AVG_DAU_STABLE = AVG_DAU_CEILING
-        st.session_state.DAILY_ENGAGEMENT_TARGET = int(AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
-
-    MAU = st.session_state.MAU_TARGET
-    AVG_DAU = st.session_state.AVG_DAU_STABLE
-    TARGET_ENGAGEMENT = st.session_state.DAILY_ENGAGEMENT_TARGET
-
+        st.session_state.MAU_TARGET = MAU
+        st.session_state.AVG_DAU_STABLE = AVG_DAU
+        st.session_state.DAILY_ENGAGEMENT_TARGET = TARGET_ENGAGEMENT
+    else:
+        # Update if manual values changed
+        st.session_state.MAU_TARGET = MAU
+        st.session_state.AVG_DAU_STABLE = AVG_DAU
+        st.session_state.DAILY_ENGAGEMENT_TARGET = TARGET_ENGAGEMENT
+    
     # --- 1. Find the target DAU for today using the full historical trend ---
-    # NOW USES CURRENT MAX_REGISTERED_USERS (which may be manual override)
-    df_historical = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+    # Use MAU (which may be manual override) and AVG_DAU (which may be manual override)
+    df_historical = generate_historical_dau_data(
+        DAU_START_DATE_STR, 
+        DAU_END_DATE_STR, 
+        MAU,  # Use the MAU value (may be manual)
+        AVG_DAU  # Use the AVG_DAU value (may be manual)
+    )
     
     # Get today's date and normalize it to match the index (midnight)
     today = pd.to_datetime(datetime.now().date())
     
-    TODAY_DAU_TARGET = AVG_DAU # Safe default (high ceiling)
+    TODAY_DAU_TARGET = AVG_DAU  # Safe default
     
     if today in df_historical.index:
         # Case 1: Today is within the simulation period
@@ -2431,8 +2471,8 @@ def get_live_metrics():
         fluctuation = max(0.95, min(1.05, fluctuation))
         current_dau = int(TODAY_DAU_TARGET * fluctuation)
     
-    # Hard cap the fluctuating DAU at the overall AVG_DAU_CEILING (9498) 
-    current_dau = min(current_dau, AVG_DAU_CEILING)
+    # Hard cap the fluctuating DAU at the overall AVG_DAU
+    current_dau = min(current_dau, AVG_DAU)
     
     # Current stickiness calculation (now stable based on the DAU value)
     current_stickiness_calc = round((current_dau / MAU) * 100, 1)
@@ -2443,11 +2483,26 @@ def get_live_metrics():
         "CURRENT_DAU": current_dau,
         "CURRENT_STICKINESS": current_stickiness_calc,
         "DAILY_ENGAGEMENT_TARGET": TARGET_ENGAGEMENT,
-        "TODAY_DAU_TARGET": TODAY_DAU_TARGET 
+        "TODAY_DAU_TARGET": TODAY_DAU_TARGET,
+        "MANUAL_MAX_USERS": MANUAL_MAX_REGISTERED_USERS,
+        "MANUAL_DAU_OVERRIDE": MANUAL_DAU_OVERRIDE,
+        "MANUAL_AVG_DAU_CEILING": MANUAL_AVG_DAU_CEILING
     }
 
 def traction_analytics():
     st.title("📈 KeepWatch — Traction Analytics Dashboard")
+    
+    # Display current manual override status
+    if MANUAL_MAX_REGISTERED_USERS is not None or MANUAL_DAU_OVERRIDE is not None or MANUAL_AVG_DAU_CEILING is not None:
+        with st.expander("⚙️ Current Manual Overrides", expanded=True):
+            cols = st.columns(3)
+            if MANUAL_MAX_REGISTERED_USERS is not None:
+                cols[0].metric("Manual MAX_USERS", f"{MANUAL_MAX_REGISTERED_USERS:,}")
+            if MANUAL_DAU_OVERRIDE is not None:
+                cols[1].metric("Manual DAU Override", f"{MANUAL_DAU_OVERRIDE:,}")
+            if MANUAL_AVG_DAU_CEILING is not None:
+                cols[2].metric("Manual DAU Ceiling", f"{MANUAL_AVG_DAU_CEILING:,}")
+    
     metrics = get_live_metrics()
 
     # --- Primary Metrics ---
@@ -2475,15 +2530,21 @@ def traction_analytics():
 
     st.markdown("---")
     
-        # --- DAU Trend (Historical) - NOW DYNAMIC ---
+    # --- DAU Trend (Historical) - NOW FULLY DYNAMIC ---
     st.subheader("DAU Trend (Historical)")
-    # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
-    df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
     
-    # Create line chart with menu disabled
+    # Generate chart with current manual values
+    df_dau = generate_historical_dau_data(
+        DAU_START_DATE_STR, 
+        DAU_END_DATE_STR, 
+        metrics['MAU_TARGET'],  # Use current MAU (may be manual)
+        metrics['AVG_DAU_STABLE']  # Use current AVG_DAU (may be manual)
+    )
+    
+    # Create line chart
     chart = st.line_chart(df_dau)
     
-    # Use CSS to hide the menu options on hover
+    # Hide chart toolbar
     st.markdown("""
     <style>
         [data-testid="stElementToolbar"] {
@@ -2498,34 +2559,34 @@ def traction_analytics():
     </style>
     """, unsafe_allow_html=True)
     
-    # Show manual override status
-    manual_status = []
-    if MANUAL_MAX_REGISTERED_USERS is not None:
-        manual_status.append(f"MAX_REGISTERED_USERS = {MANUAL_MAX_REGISTERED_USERS:,}")
-    if MANUAL_DAU_OVERRIDE is not None:
-        manual_status.append(f"DAU_OVERRIDE = {MANUAL_DAU_OVERRIDE:,}")
-    if MANUAL_AVG_DAU_CEILING is not None:
-        manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
-    
-    if manual_status:
-        st.caption(f"Historical growth curve last updated at 7:14 AM. Live DAU tracks this line.")
-    else:
-        st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
+    # Show current parameters
+    st.caption(f"📊 Chart parameters: MAU = {metrics['MAU_TARGET']:,}, DAU Ceiling = {metrics['AVG_DAU_STABLE']:,}")
+    if MANUAL_MAX_REGISTERED_USERS is not None or MANUAL_AVG_DAU_CEILING is not None:
+        st.caption("🔄 Using manual override values")
 
     # --- Prayer Watch Engagement ---
     st.subheader("Prayer Watch Engagement — Core Feature Usage")
+    
     watches = ["1st (Sunrise Hour)", "2nd (Third Hour (The Trial))", "3rd (Sixth Hour (The Crucifixion))", "4th (Ninth Hour (The Sacrifice))", 
                "1st (Sunset Hour (The Burial/Resurrection))", "2nd (Third Hour of Night)", "3rd (Midnight)", "4th (Ninth Hour of Night)"]
+    
     # Original proportions (keep these fixed)
     original_proportions = np.array([0.13596, 0.10965, 0.10526, 0.12719, 0.13596, 0.11842, 0.15351, 0.11404])
     
-    # Calculate based on CURRENT AVG_DAU_CEILING (which may be manual)
-    CURRENT_AVG_DAU_CEILING = metrics['AVG_DAU_STABLE']  # From your get_live_metrics()
-    total = int(CURRENT_AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
-    engagement = np.round(original_proportions * total).astype(int)
-    per_user = total / CURRENT_AVG_DAU_CEILING 
+    # Use the CURRENT AVG_DAU_STABLE (which now incorporates manual overrides)
+    CURRENT_AVG_DAU = metrics['AVG_DAU_STABLE']
     
-    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
+    # Calculate total engagement based on manual AVG_DAU
+    total = int(CURRENT_AVG_DAU * DAILY_ENGAGEMENT_MULTIPLIER)
+    engagement = np.round(original_proportions * total).astype(int)
+    per_user = total / CURRENT_AVG_DAU 
+    
+    st.info(f"**{CURRENT_AVG_DAU:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
+    
+    # Show how engagement changes with manual overrides
+    if MANUAL_AVG_DAU_CEILING is not None or MANUAL_DAU_OVERRIDE is not None:
+        st.caption(f"📈 Engagement scaled to manual DAU ceiling of {CURRENT_AVG_DAU:,}")
+    
     df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
     st.bar_chart(df_w)
     
