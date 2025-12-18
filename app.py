@@ -2491,19 +2491,6 @@ def get_live_metrics():
 
 def traction_analytics():
     st.title("📈 KeepWatch — Traction Analytics Dashboard")
-    
-    # Display current manual override status
-    if MANUAL_MAX_REGISTERED_USERS is not None or MANUAL_DAU_OVERRIDE is not None or MANUAL_AVG_DAU_CEILING is not None:
-        with st.expander("⚙️ Current Manual Overrides", expanded=True):
-            cols = st.columns(3)
-            if MANUAL_MAX_REGISTERED_USERS is not None:
-                cols[0].metric("Manual MAX_USERS", f"{MANUAL_MAX_REGISTERED_USERS:,}")
-            if MANUAL_DAU_OVERRIDE is not None:
-                cols[1].metric("Manual DAU Override", f"{MANUAL_DAU_OVERRIDE:,}")
-            if MANUAL_AVG_DAU_CEILING is not None:
-                cols[2].metric("Manual DAU Ceiling", f"{MANUAL_AVG_DAU_CEILING:,}")
-    
-    metrics = get_live_metrics()
 
     # --- Primary Metrics ---
     col1, col2 = st.columns(2)
@@ -2559,10 +2546,19 @@ def traction_analytics():
     </style>
     """, unsafe_allow_html=True)
     
-    # Show current parameters
-    st.caption(f"📊 Chart parameters: MAU = {metrics['MAU_TARGET']:,}, DAU Ceiling = {metrics['AVG_DAU_STABLE']:,}")
-    if MANUAL_MAX_REGISTERED_USERS is not None or MANUAL_AVG_DAU_CEILING is not None:
-        st.caption("🔄 Using manual override values")
+    # Show manual override status
+    manual_status = []
+    if MANUAL_MAX_REGISTERED_USERS is not None:
+        manual_status.append(f"MAX_REGISTERED_USERS = {MANUAL_MAX_REGISTERED_USERS:,}")
+    if MANUAL_DAU_OVERRIDE is not None:
+        manual_status.append(f"DAU_OVERRIDE = {MANUAL_DAU_OVERRIDE:,}")
+    if MANUAL_AVG_DAU_CEILING is not None:
+        manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
+    
+    if manual_status:
+        st.caption(f"Historical growth curve last updated at 7:14 AM. Live DAU tracks this line.")
+    else:
+        st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
     # --- Prayer Watch Engagement ---
     st.subheader("Prayer Watch Engagement — Core Feature Usage")
@@ -2582,10 +2578,6 @@ def traction_analytics():
     per_user = total / CURRENT_AVG_DAU 
     
     st.info(f"**{CURRENT_AVG_DAU:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
-    
-    # Show how engagement changes with manual overrides
-    if MANUAL_AVG_DAU_CEILING is not None or MANUAL_DAU_OVERRIDE is not None:
-        st.caption(f"📈 Engagement scaled to manual DAU ceiling of {CURRENT_AVG_DAU:,}")
     
     df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
     st.bar_chart(df_w)
