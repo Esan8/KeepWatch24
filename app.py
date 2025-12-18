@@ -2475,18 +2475,15 @@ def traction_analytics():
 
     st.markdown("---")
     
-        # --- DAU Trend (Historical) - NOW FULLY DYNAMIC ---
+        # --- DAU Trend (Historical) - NOW DYNAMIC ---
     st.subheader("DAU Trend (Historical)")
+    # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
+    df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
     
-    # Generate chart with current manual values
-    df_dau = generate_historical_dau_data(
-        DAU_START_DATE_STR, 
-        DAU_END_DATE_STR, 
-        metrics['MAU_TARGET'],  # Use current MAU (may be manual)
-        metrics['AVG_DAU_STABLE']  # Use current AVG_DAU (may be manual)
-    )
+    # Create line chart with menu disabled
+    chart = st.line_chart(df_dau)
     
-    # Hide chart toolbar
+    # Use CSS to hide the menu options on hover
     st.markdown("""
     <style>
         [data-testid="stElementToolbar"] {
