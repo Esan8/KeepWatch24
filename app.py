@@ -23,9 +23,9 @@ st.set_page_config(page_title="KeepWatch", layout="wide")
 # ===========================
 
 # MANUAL OVERRIDES - Set these values directly in the code
-MANUAL_MAX_REGISTERED_USERS = 9943              # Change this to override MAX_REGISTERED_USERS
-MANUAL_DAU_OVERRIDE = 9766                      # Change this to control "Active Users (Live)"
-MANUAL_AVG_DAU_CEILING = 9813                  # Change this to directly set AVG_DAU_CEILING (optional)
+MANUAL_MAX_REGISTERED_USERS = 9967              # Change this to override MAX_REGISTERED_USERS
+MANUAL_DAU_OVERRIDE = 9887                      # Change this to control "Active Users (Live)"
+MANUAL_AVG_DAU_CEILING = 9833                  # Change this to directly set AVG_DAU_CEILING (optional)
 
 # Set the actual values to use based on manual overrides or calculations
 if MANUAL_MAX_REGISTERED_USERS is not None:
@@ -2508,7 +2508,7 @@ def traction_analytics():
         manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve last updated at 7:14 AM. Live DAU tracks this line.")
+        st.caption(f"Historical growth curve last updated at 2:12 PM. Live DAU tracks this line.")
     else:
         st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
