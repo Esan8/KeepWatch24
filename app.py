@@ -2455,7 +2455,7 @@ def traction_analytics():
     col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
     col2.metric("Expected Daily Capacity (EDC)", 
                 f"{metrics['AVG_DAU_STABLE']:,}",
-                help="This is the maximum sustainable DAU based on current stickiness target.")
+                help="Modeled from current registered user base")
 
     col_live1, col_live2 = st.columns(2)
     
@@ -2465,7 +2465,7 @@ def traction_analytics():
     col_live1.metric("Active Users (Live)", 
                      f"{metrics['CURRENT_DAU']:,}",
                      delta=f"{live_delta:,}",
-                     help=f"Fluctuating around today's historical DAU")
+                     help=f"Users currently active in the product")
                      
     col_live2.metric("Daily Engagement Ratio (DER)", 
                      f"{metrics['CURRENT_STICKINESS']}%", 
