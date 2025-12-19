@@ -2525,7 +2525,7 @@ def traction_analytics():
     engagement = np.round(original_proportions * total).astype(int)
     per_user = total / CURRENT_AVG_DAU_CEILING 
     
-    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
+    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Expected Daily Capacity (EDC)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
     df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
     st.bar_chart(df_w)
     
