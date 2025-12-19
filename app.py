@@ -2476,7 +2476,7 @@ def traction_analytics():
     st.markdown("---")
     
         # --- DAU Trend (Historical) - NOW DYNAMIC ---
-    st.subheader("DAU Trend (Historical)")
+    st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
     # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
     df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
     
@@ -2508,7 +2508,7 @@ def traction_analytics():
         manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve last updated at 9:34 AM.")
+        st.caption(f"(PEAK DAILY) Historical growth curve last updated at 9:34 AM.")
     else:
         st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
