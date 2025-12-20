@@ -18,11 +18,67 @@ st.set_page_config(page_title="KeepWatch", layout="wide")
 
 # Groq API setup (used only for Faith Companion)
 try:
+    # First try Streamlit secrets
     groq_token = st.secrets["api_keys"]["GROQ_API_TOKEN"]
-except KeyError:
-    st.error("Groq API token not found. Please set the GROQ_API_TOKEN in your Streamlit Secrets.")
-    st.stop()
-groq_client = Groq(api_key=groq_token)
+except (KeyError, FileNotFoundError):
+    # If secrets not available, check for environment variable (for local development)
+    groq_token = os.getenv("GROQ_API_TOKEN")
+    
+    if not groq_token:
+        # Provide clear guidance for users
+        st.error("""
+        ## 🔑 API Key Required
+        
+        **Please configure your Groq API key** to use the Faith Companion feature:
+        
+        ### Option 1: Local Development
+        Create a `.env` file in your project directory with:
+        ```
+        GROQ_API_TOKEN=your_groq_api_key_here
+        ```
+        
+        ### Option 2: Streamlit Cloud Deployment
+        Add your API key to Streamlit Secrets:
+        1. Go to your app dashboard
+        2. Click "⋮" → "Settings" → "Secrets"
+        3. Add:
+        ```toml
+        [api_keys]
+        GROQ_API_TOKEN = "your_groq_api_key_here"
+        ```
+        
+        ### Get a Groq API Key:
+        1. Visit [console.groq.com](https://console.groq.com)
+        2. Sign up/login
+        3. Go to "API Keys"
+        4. Create a new key
+        5. Copy and paste it above
+        
+        ### ⚠️ Important:
+        - Don't commit your `.env` file to version control
+        - Never share your API keys publicly
+        
+        The Faith Companion will be disabled until a valid API key is provided.
+        """)
+        
+        # Create a mock client for other features to work
+        class MockGroqClient:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def create(messages, model):
+                        class MockResponse:
+                            class Choice:
+                                class Message:
+                                    content = "⚠️ **Faith Companion is temporarily unavailable**\n\nPlease add your Groq API key to enable this feature. See the error message above for instructions.\n\nIn the meantime, you can use the other features of KeepWatch: Bible reading, prayer watches, trivia games, and resources."
+                            choices = [Choice()]
+                        return MockResponse()
+        
+        groq_client = MockGroqClient()
+    else:
+        groq_client = Groq(api_key=groq_token)
+else:
+    groq_client = Groq(api_key=groq_token)
 
 # Define constants
 GOOGLE_FORM_EMBED_URL = "https://forms.gle/WNetJA3ZVoX1HeXB7"
