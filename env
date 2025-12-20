@@ -1,3 +1,3 @@
-GROQ_API_TOKEN ="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"
+GROQ_API_TOKEN ="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"
 pip install plyer
 pip install streamlit requests pyjwt
