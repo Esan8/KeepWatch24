@@ -24,7 +24,7 @@ st.set_page_config(page_title="KeepWatch", layout="wide")
 
 # MANUAL OVERRIDES - Set these values directly in the code
 MANUAL_MAX_REGISTERED_USERS = 10007              # Change this to override MAX_REGISTERED_USERS
-MANUAL_DAU_OVERRIDE = 9894                      # Change this to control "Active Users (Live)"
+MANUAL_DAU_OVERRIDE = 9694                      # Change this to control "Active Users (Live)"
 MANUAL_AVG_DAU_CEILING = 9989                  # Change this to directly set AVG_DAU_CEILING (optional)
 
 # Set the actual values to use based on manual overrides or calculations
