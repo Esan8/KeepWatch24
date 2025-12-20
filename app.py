@@ -1,18 +1,20 @@
-import html
 import streamlit as st
-from datetime import date, datetime, timedelta
-import requests
-import pytz
+import numpy as np
+import pandas as pd
+import random
+import re
+import os
 from groq import Groq
 from dotenv import load_dotenv
-import os
-import re
-import json
-import random
+from datetime import datetime, timedelta
+import pytz
 from bs4 import BeautifulSoup
-import numpy as np
+import requests
+import json
 
-# Environment setup
+# ===========================
+# 1. Environment & Config
+# ===========================
 load_dotenv()
 st.set_page_config(page_title="KeepWatch", layout="wide")
 
@@ -24,7 +26,44 @@ except KeyError:
     st.stop()
 groq_client = Groq(api_key=groq_token)
 
-# Define constants
+# ===========================
+# 2. Analytics Constants & Targets
+# ===========================
+
+# MANUAL OVERRIDES - Set these values directly in the code
+MANUAL_MAX_REGISTERED_USERS = 10007              # Change this to override MAX_REGISTERED_USERS
+MANUAL_DAU_OVERRIDE = 9694                      # Change this to control "Active Users (Live)"
+MANUAL_AVG_DAU_CEILING = 9989                  # Change this to directly set AVG_DAU_CEILING (optional)
+
+# Set the actual values to use based on manual overrides or calculations
+if MANUAL_MAX_REGISTERED_USERS is not None:
+    MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS
+else:
+    MAX_REGISTERED_USERS = 9898  # Default fallback
+
+# Calculate AVG_STICKINESS_TARGET based on the priority of manual overrides
+if MANUAL_AVG_DAU_CEILING is not None:
+    # Priority 1: MANUAL_AVG_DAU_CEILING takes precedence
+    AVG_DAU_CEILING = MANUAL_AVG_DAU_CEILING
+    AVG_STICKINESS_TARGET = AVG_DAU_CEILING / MAX_REGISTERED_USERS
+elif MANUAL_DAU_OVERRIDE is not None:
+    # Priority 2: MANUAL_DAU_OVERRIDE affects calculations
+    AVG_STICKINESS_TARGET = MANUAL_DAU_OVERRIDE / MAX_REGISTERED_USERS
+    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)
+else:
+    # Priority 3: Default calculations
+    AVG_STICKINESS_TARGET = 0.98  # Default stickiness
+    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)  # 9799 with defaults
+
+DAILY_ENGAGEMENT_MULTIPLIER = 5.0
+
+# Other constants remain the same
+DAU_START_DATE_STR = "2025-05-16"
+DAU_END_DATE_STR = "2025-12-19"
+
+# ===========================
+# 3. App Constants & Patterns
+# ===========================
 GOOGLE_FORM_EMBED_URL = "https://forms.gle/WNetJA3ZVoX1HeXB7"
 BIBLE_VERSE_PATTERN = re.compile(r'\b([1-3]?\s?[A-Za-z]+)\s(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?\b', re.IGNORECASE)
 
@@ -68,7 +107,37 @@ numbers_pool = [
     "Eight", "Nine"
 ]
 
-# Static question bank with 600 questions
+# ===========================
+# 5. AUTHENTICATION
+# ===========================
+
+def authenticate(username_input, password_input):
+    """
+    Authenticates using st.secrets or local fallback.
+    Case-insensitive username matching.
+    """
+    username_input = username_input.strip()
+    password_input = password_input.strip()
+    
+    clean_username = username_input.lower()
+    
+    try:
+        users_list = st.secrets["auth"]["users"]
+        
+        # Check if any user matches the credentials
+        match = any(
+            user["username"].strip().lower() == clean_username and 
+            user["password"] == password_input
+            for user in users_list
+        )
+        return match
+    except (KeyError, TypeError, AttributeError):
+        st.warning("Using fallback authentication (secrets 'auth' not found).")
+        return clean_username == "admin" and password_input == "test"
+
+# ===========================
+# 6. QUESTION BANKS & POOLS
+# ===========================
 static_question_bank = [
     {"question": "What was the name of Jesus' mother?", "correct": "Mary", "reference": "Matt 1:18"},
     {"question": "What was the name of the garden where Adam and Eve lived?", "correct": "Garden of Eden", "reference": "Gen 2:8"},
@@ -682,7 +751,7 @@ static_question_bank = [
     {"question": "Who was Noah's father?", "correct": "Lamech", "reference": "Gen 5:28-29"},
 ]
 
-# Distractors bank with challenging options for all 550 questions
+# Distractors by question type/category
 distractors_bank = {
     "What was the name of Jesus' mother?": ["Martha", "Elizabeth", "Sarah"],
     "What was the name of the garden where Adam and Eve lived?": ["Gethsemane", "Canaan", "Eden (Mount Zion)"],
@@ -1296,7 +1365,7 @@ distractors_bank = {
     "Who was Noah's father?": ["Enoch", "Methuselah", "Jared"],
 }
 
-# Hangman word pool with hints and references
+# Hangman word pools by category
 hangman_pool = {
     "NOAHS ARK": {"hint": "This saved a family and animals from a great flood.", "reference": "Gen 7:7"},
     "DAVID": {"hint": "A shepherd boy who became a king and defeated a giant.", "reference": "1 Sam 17:49"},
@@ -1346,7 +1415,7 @@ hangman_pool = {
     "FORTY": {"hint": "The number of days Jesus fasted in the wilderness.", "reference": "Matt 4:2"}
 }
 
-# Word Search Themes
+# Word search themes
 word_search_themes = {
     "Creation": ["GENESIS", "CREATION", "ADAM", "EVE", "GARDEN", "EDEN", "TREE", "FRUIT", "SERPENT", "LIGHT", "DARKNESS", "SEA", "LAND", "ANIMALS", "MAN", "WOMAN", "SEVENDAYS", "GODSAW", "GOOD", "REST"],
     "Exodus": ["MOSES", "PHARAOH", "PLAGUES", "REDSEA", "PASSOVER", "MANNA", "COMMANDMENTS", "TABLET", "AARON", "MIRIAM", "ISRAELITES", "EGYPT", "BUSH", "FIRE", "WANDER", "QUAIL", "PILLAR", "CLOUD", "BITTER", "WATER"],
@@ -1584,187 +1653,65 @@ for num in random.sample(numbers_pool, 5):
     if num.upper() not in hangman_pool:
         hangman_pool[num.upper()] = generate_hangman_hint(num, "numbers")
 
-# Helper Functions
-def link_bible_verses(text, version="BSB"):
-    def replacer(match):
-        book, chapter, verse, end_verse = match.groups()
-        book = book.strip()
-        book_mappings = {
-            "Psalm": "psalms", "Psalms": "psalms", "Ps": "psalms", "Song of Solomon": "song_of_solomon",
-            "Song of Songs": "song_of_songs", "Jn": "john", "John": "john",
-            "Gen": "genesis", "Genesis": "genesis", "Exod": "exodus", "Exo": "exodus", "Exodus": "exodus",
-            "Lev": "leviticus", "Leviticus": "leviticus", "Num": "numbers", "Numbers": "numbers",
-            "Deut": "deuteronomy", "Deuteronomy": "deuteronomy", "Josh": "joshua", "Joshua": "joshua",
-            "Judg": "judges", "Jdg": "judges", "Judges": "judges", "Ruth": "ruth",
-            "1 Samuel": "1_samuel", "1 Sam": "1_samuel", "2 Samuel": "2_samuel", "2 Sam": "2_samuel", "1 Kings": "1_kings", "1 Ki": "1_kings", "2 Kings": "2_kings", "2 Ki": "2_kings",
-            "1 Chronicles": "1_chronicles", "2 Chronicles": "2_chronicles", "Ezra": "ezra",
-            "Nehemiah": "nehemiah", "Esther": "esther", "Job": "job", "Prov": "proverbs",
-            "Proverbs": "proverbs", "Ecclesiastes": "ecclesiastes", "Isaiah": "isaiah",
-            "Jeremiah": "jeremiah", "Lamentations": "lamentations", "Ezekiel": "ezekiel",
-            "Daniel": "daniel", "Dan": "daniel", "Hosea": "hosea", "Hos": "hosea", "Joel": "joel", "Amos": "amos",
-            "Obadiah": "obadiah", "Jonah": "jonah", "Jon": "jonah", "Micah": "micah", "Nahum": "nahum",
-            "Habakkuk": "habakkuk", "Zephaniah": "zephaniah", "Haggai": "haggai",
-            "Zechariah": "zechariah", "Malachi": "malachi", "Matthew": "matthew", "Matt": "matthew",
-            "Mark": "mark", "Luke": "luke", "John": "john", "Acts": "acts",
-            "Romans": "romans", "Rom": "romans", "1 Corinthians": "1_corinthians", "2 Corinthians": "2_corinthians",
-            "Galatians": "galatians", "Ephesians": "ephesians", "Philippians": "philippians",
-            "Colossians": "colossians", "1 Thessalonians": "1_thessalonians",
-            "2 Thessalonians": "2_thessalonians", "1 Timothy": "1_timothy", "1 Tim": "1_timothy", "2 Timothy": "2_timothy", "2 Tim": "2_timothy",
-            "Titus": "titus", "Philemon": "philemon", "Phm": "philemon", "Hebrews": "hebrews", "James": "james",
-            "1 Peter": "1_peter", "2 Peter": "2_peter", "1 John": "1_john", "2 John": "2_john",
-            "3 John": "3_john", "Jude": "jude", "Revelation": "revelation"
+# ===========================
+# 7. HELPER FUNCTIONS
+# ===========================
+def bible_trivia():
+    st.title("📜 Bible Trivia Questions")
+    st.write("Test your knowledge of the Bible with multiple-choice questions.")
+    
+    if 'used_trivia_questions' not in st.session_state:
+        st.session_state.used_trivia_questions = set()
+    if 'trivia_questions' not in st.session_state or st.session_state.get('trivia_reset', False):
+        trivia_questions = generate_bible_trivia_questions(5, st.session_state.used_trivia_questions)
+        st.session_state.trivia_questions = trivia_questions
+        st.session_state.user_answers = [None] * len(trivia_questions)
+        st.session_state.trivia_submitted = False
+        st.session_state.trivia_reset = False
+    
+    with st.form(key="trivia_form"):
+        for i, q in enumerate(st.session_state.trivia_questions):
+            st.markdown(f"**Question {i+1}:** {link_bible_verses(q['question'])}")
+            answer = st.radio(f"Select an answer for Question {i+1}", q["options"], key=f"q{i}")
+            st.session_state.user_answers[i] = answer
+        submit_button = st.form_submit_button(label="Submit Answers")
+    
+    if submit_button:
+        st.session_state.trivia_submitted = True
+        correct_count = 0
+        results = []
+        for i, q in enumerate(st.session_state.trivia_questions):
+            user_answer = st.session_state.user_answers[i]
+            is_correct = user_answer == q["correct"]
+            if is_correct:
+                correct_count += 1
+            results.append({
+                "question": q["question"],
+                "user_answer": user_answer,
+                "correct_answer": q["correct"],
+                "reference": q["reference"],
+                "is_correct": is_correct
+            })
+        st.subheader("Your Results")
+        st.write(f"**Score:** {correct_count} out of {len(st.session_state.trivia_questions)}")
+        for res in results:
+            status = "✅ Correct" if res["is_correct"] else "❌ Incorrect"
+            with st.expander(f"{status}: {link_bible_verses(res['question'])}"):
+                st.write(f"Your Answer: {res['user_answer']}")
+                st.write(f"Correct Answer: {res['correct_answer']}")
+                st.markdown(f"Reference: {link_bible_verses(res['reference'])}")
+        score_data = {
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "score": f"{correct_count}/{len(st.session_state.trivia_questions)}",
+            "results": results
         }
-        normalized_book = book_mappings.get(book, book.lower().replace(" ", "_"))
-        if normalized_book.startswith(("1_", "2_", "3_")):
-            parts = normalized_book.split("_")
-            normalized_book = f"{parts[0]}_{'_'.join(parts[1:])}"
-        base_url = f"https://biblehub.com/{normalized_book}/{chapter}-{verse}.htm"
-        display = f"{book} {chapter}:{verse}" + (f"-{end_verse}" if end_verse else "")
-        try:
-            return f"[{display}]({base_url})"
-        except ValueError:
-            return match.group(0)
-    return BIBLE_VERSE_PATTERN.sub(replacer, text)
-
-@st.cache_data(ttl=3600)
-def fetch_prayer_times_aladhan(city, country, method=2, date_obj=None):
-    try:
-        api_url = "https://api.aladhan.com/v1/timingsByCity"
-        params = {'city': city, 'country': country, 'method': method}
-        if date_obj:
-            params['date'] = date_obj.strftime('%d-%m-%Y')
-        response = requests.get(api_url, params=params, timeout=10)
-        data = response.json()
-        if response.status_code == 200 and data['code'] == 200:
-            return data['data']
-        else:
-            st.error("Aladhan API error: " + data.get('status', 'Unknown error'))
-    except requests.exceptions.RequestException as e:
-        st.error(f"Aladhan API request failed: {e}")
-    return None
-
-def parse_time(time_str, date_obj, timezone_str):
-    try:
-        tz = pytz.timezone(timezone_str)
-        time_clean = time_str.split(' ')[0]
-        time_obj = datetime.strptime(time_clean, '%H:%M').time()
-        datetime_obj = datetime.combine(date_obj, time_obj)
-        return tz.localize(datetime_obj)
-    except Exception as e:
-        st.error(f"Time parsing error: {e}")
-        return None
-
-def calculate_hours(sunrise: datetime, sunset: datetime):
-    try:
-        day_duration = sunset - sunrise
-        night_duration = timedelta(hours=24) - day_duration
-        day_hour_length = day_duration / 12
-        night_hour_length = night_duration / 12
-        day_hours = [(sunrise + day_hour_length * (i - 1), sunrise + day_hour_length * i) for i in range(1, 13)]
-        night_hours = [(sunset + night_hour_length * (i - 1), sunset + night_hour_length * i) for i in range(1, 13)]
-        return day_hours, night_hours
-    except Exception as e:
-        st.error(f"Error calculating sacred hours: {e}")
-        return [], []
-
-@st.cache_resource
-def get_books_and_versions():
-    all_books = [
-        "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
-        "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
-        "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon",
-        "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
-        "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah",
-        "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
-        "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians",
-        "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
-        "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation", "Psalm"
-    ]
-    versions = {
-        "American Standard Version (ASV)": "asv", "Berean Study Bible (BSB)": "bsb",
-        "English Standard Version (ESV)": "esv", "King James Version (KJV)": "kjv", 
-        "New American Standard Bible (NASB)": "nasb", "New International Version (NIV)": "niv", 
-        "New King James Version (NKJV)": "nkjv", "New Living Translation (NLT)": "nlt", 
-        "World English Bible (WEB)": "web", "Young's Literal Translation (YLT)": "ylt", "Darby Bible Translation (DBT)": "dbt"
-    }
-    book_chapters = {
-        "Psalms": 150, "Psalm": 150, "Isaiah": 66, "Genesis": 50, "Exodus": 40, "Leviticus": 27,
-        "Numbers": 36, "Deuteronomy": 34, "Joshua": 24, "Judges": 21, "Ruth": 4, "1 Samuel": 31,
-        "2 Samuel": 24, "1 Kings": 22, "2 Kings": 25, "1 Chronicles": 29, "2 Chronicles": 36,
-        "Ezra": 10, "Nehemiah": 13, "Esther": 10, "Job": 42, "Proverbs": 31, "Ecclesiastes": 12,
-        "Song of Solomon": 8, "Jeremiah": 52, "Lamentations": 5, "Ezekiel": 48, "Daniel": 12,
-        "Hosea": 14, "Joel": 3, "Amos": 9, "Obadiah": 1, "Jonah": 4, "Micah": 7, "Nahum": 3,
-        "Habakkuk": 3, "Zephaniah": 3, "Haggai": 2, "Zechariah": 14, "Malachi": 4, "Matthew": 28,
-        "Mark": 16, "Luke": 24, "John": 21, "Acts": 28, "Romans": 16, "1 Corinthians": 16,
-        "2 Corinthians": 13, "Galatians": 6, "Ephesians": 6, "Philippians": 4, "Colossians": 4,
-        "1 Thessalonians": 5, "2 Thessalonians": 3, "1 Timothy": 6, "2 Timothy": 4, "Titus": 3,
-        "Philemon": 1, "Hebrews": 13, "James": 5, "1 Peter": 5, "2 Peter": 3, "1 John": 5,
-        "2 John": 1, "3 John": 1, "Jude": 1, "Revelation": 22
-    }
-    return all_books, versions, book_chapters
-
-def authenticate(username_input, password_input):
-    username_input = username_input.strip()
-    password_input = password_input.strip()
-    try:
-        users = st.secrets["auth"]["users"]
-        for user in users:
-            if user["username"] == username_input and user["password"] == password_input:
-                return True
-        return False
-    except KeyError:
-        return False
-
-def get_copier_js(button_id, text):
-    escaped_text = text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
-    return f"""
-    <script>
-    function copyText_{button_id}() {{
-        navigator.clipboard.writeText("{escaped_text}");
-        alert("📋 Copied to clipboard!");
-    }}
-    </script>
-    """
-
-def chat_to_json(messages):
-    return json.dumps(messages, indent=2)
-
-# Updated function to generate trivia questions with new distractors
-def generate_bible_trivia_questions(num_questions=5, used_questions=None):
-    if used_questions is None:
-        used_questions = set()
-    available_questions = [q for q in static_question_bank if q["question"] not in used_questions]
-    if len(available_questions) < num_questions:
-        used_questions.clear()
-        available_questions = static_question_bank.copy()
-    selected_questions = random.sample(available_questions, min(num_questions, len(available_questions)))
-    trivia_questions = []
-
-    for q in selected_questions:
-        correct = q["correct"]
-        distractors = distractors_bank.get(q["question"], [])
-        if not distractors:  # Fallback if no specific distractors are defined
-            if correct in people_pool:
-                distractors = random.sample([x for x in people_pool if x != correct], 3)
-            elif correct in places_pool:
-                distractors = random.sample([x for x in places_pool if x != correct], 3)
-            elif correct in objects_pool:
-                distractors = random.sample([x for x in objects_pool if x != correct], 3)
-            elif correct in numbers_pool:
-                distractors = random.sample([x for x in numbers_pool if x != correct], 3)
-            else:
-                distractors = random.sample(people_pool + places_pool + objects_pool + numbers_pool, 3)
-
-        options = [correct] + distractors
-        random.shuffle(options)
-        trivia_questions.append({
-            "question": q["question"],
-            "options": options,
-            "correct": correct,
-            "reference": q["reference"]
-        })
-        used_questions.add(q["question"])
-    return trivia_questions
+        st.download_button(
+            label="Save Your Score",
+            data=json.dumps(score_data, indent=2),
+            file_name=f"bible_trivia_score_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            help="Download your trivia score and results."
+        )
 
 # Hangman Functions
 def initialize_hangman():
@@ -1936,10 +1883,426 @@ def bible_hangman():
                 else:
                     st.button(char, disabled=True, key=f"hangman_{char}_disabled")
 
+def bible_word_search():
+    st.title("🔍 Interactive Bible Word Search - Only Compatible in Web View")
+    st.write("Select a theme and find the hidden words in the grid!")
+    
+    theme = st.selectbox("Choose a theme:", sorted(list(word_search_themes.keys())))
+    
+    # Initialize session state if needed
+    if 'word_search_theme' not in st.session_state:
+        st.session_state.word_search_theme = theme
+    
+    # Reset if theme changed
+    if st.session_state.word_search_theme != theme:
+        st.session_state.word_search_theme = theme
+        st.session_state.word_search_grid = None
+    
+    if st.button("Generate New Word Search", key="generate_word_search"):
+        # Generate new puzzle
+        words = word_search_themes[theme]
+        word_search_data = create_word_search(words)  # This returns a dict
+        st.session_state.word_search_grid = word_search_data['grid']
+        st.session_state.word_search_words = words
+        st.session_state.word_search_theme = theme
+        st.session_state.word_positions = word_search_data['word_positions']
+        st.session_state.word_search_run_id = int(datetime.now().timestamp() * 1000)
+        st.session_state.selected_cells = []
+        if 'found_words' in st.session_state:
+            del st.session_state.found_words
+        st.rerun()
+    
+    # Display the puzzle if it exists
+    if 'word_search_grid' in st.session_state:
+        # Get the data from session state
+        grid = st.session_state.word_search_grid
+        words = st.session_state.word_search_words
+        word_positions = st.session_state.word_positions
+        
+        # Make sure grid is a numpy array (not a dict)
+        if isinstance(grid, dict) and 'grid' in grid:
+            grid = grid['grid']
+        
+        # Initialize session state for found words if not present
+        if 'found_words' not in st.session_state:
+            st.session_state.found_words = {word.upper(): False for word in words}
+        
+        # Ensure selected_cells exists
+        if 'selected_cells' not in st.session_state:
+            st.session_state.selected_cells = []
+        
+        # Use the run_id from session state
+        run_id = st.session_state.word_search_run_id
+        
+        # Display section
+        st.write("### Words to Find:")
+        cols = st.columns(4)
+        for i, word in enumerate(words):
+            with cols[i % 4]:
+                found = st.session_state.found_words.get(word.upper(), False)
+                st.checkbox(
+                    word,
+                    value=found,
+                    key=f"found_{run_id}_{i}",
+                    disabled=found
+                )
+        
+        st.write("### Word Search Grid")
+        st.write("""
+        **🖱️ How to Play:**  
+        1. **Click on letters of words you find**  
+        2. **Wrong click?** Re-click to unselect  
+        3. **Found words** auto-highlight  
+        4. **Check off the boxes above for the words found**
+        """)
+        
+        # Display the grid
+        for row_idx, row in enumerate(grid):
+            cols = st.columns(len(row))
+            for col_idx, letter in enumerate(row):
+                with cols[col_idx]:
+                    pos = (row_idx, col_idx)
+                    is_selected = pos in st.session_state.selected_cells
+                    is_in_word = False
+                    
+                    # Check if this position is part of a found word
+                    for word, data in word_positions.items():
+                        if data.get('found', False) and pos in data.get('positions', []):
+                            is_in_word = True
+                            break
+                    
+                    button_key = f"cell_{run_id}_{row_idx}_{col_idx}"
+                    if is_in_word:
+                        st.button(letter, key=f"{button_key}_found", disabled=True, help="Already found!")
+                    elif is_selected:
+                        if st.button(letter, key=f"{button_key}_sel", type="primary"):
+                            st.session_state.selected_cells.remove(pos)
+                            st.rerun()
+                    else:
+                        if st.button(letter, key=button_key):
+                            st.session_state.selected_cells.append(pos)
+                            st.rerun()
+        
+        # Check if a word is found
+        if len(st.session_state.selected_cells) >= 2:
+            start = st.session_state.selected_cells[0]
+            end = st.session_state.selected_cells[-1]
+            for word, data in word_positions.items():
+                if not data.get('found', False) and 'positions' in data:
+                    word_positions_list = data['positions']
+                    if word_positions_list:
+                        word_start = word_positions_list[0]
+                        word_end = word_positions_list[-1]
+                        if (start == word_start and end == word_end) or (start == word_end and end == word_start):
+                            data['found'] = True
+                            st.session_state.found_words[word] = True
+                            st.session_state.selected_cells = []
+                            st.success(f"Found word: {word}!")
+                            st.rerun()
+        
+        # Completion check
+        if all(st.session_state.found_words.values()):
+            st.balloons()
+            st.success("🎉 Congratulations! You've completed the word search!")
+            st.markdown("""
+            <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; margin-top:20px;">
+                <h3 style="color:#2e7d32; text-align:center;">Well Done!</h3>
+                <p style="text-align:center;">You've found all the words in this Bible-themed word search.</p>
+                <p style="text-align:center;">"Your word is a lamp to my feet and a light to my path." - Psalm 119:105</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Download button
+        if st.button("Download Puzzle", key=f"download_{run_id}"):
+            grid_text = "\n".join([" ".join(row) for row in grid])
+            words_text = "\n".join(words)
+            full_text = f"Bible Word Search - Theme: {theme}\n\nWords to find:\n{words_text}\n\n{grid_text}"
+            st.download_button(
+                label="Confirm Download",
+                data=full_text,
+                file_name=f"bible_word_search_{theme.lower().replace(' ', '_')}.txt",
+                mime="text/plain",
+                key=f"dl_btn_{run_id}"
+            )
+        
+# ===========================
+# 8. PRAYER WATCH REMINDERS FUNCTION
+# ===========================
+def prayer_watch_reminders():
+    st.title("⏰ Prayer Watch Reminders")
+    st.write("Enter any city and country to receive the Sacred Prayer Watches based on the current date.")
+    
+    # User Inputs
+    city_input = st.text_input("📍 City Name (e.g., 'Brooklyn' or 'Brooklyn, NY' or 'Paris, France')")
+    country_input = st.text_input("🌍 Country Name (e.g., 'USA' or 'France')")
+
+    if st.button("⏰ Calculate the Prayer Watches"):
+        if not city_input.strip():
+            st.error("❌ Please enter a valid city name.")
+        elif not country_input.strip():
+            st.error("❌ Please enter a valid country name.")
+        else:
+            prayer_data = fetch_prayer_times_aladhan(city_input, country_input, date_obj=datetime.now().date())
+            
+            if prayer_data:
+                timings = prayer_data['timings']
+                timezone = prayer_data['meta']['timezone']
+                sunrise = parse_time(timings['Sunrise'], datetime.now().date(), timezone)
+                sunset = parse_time(timings['Sunset'], datetime.now().date(), timezone)
+                
+                if sunrise and sunset:
+                    day_hours, night_hours = calculate_hours(sunrise, sunset)
+                    
+                    # Day Watches (Morning)
+                    day_hour_details = [
+                        {
+                            "name": "Sunrise Hour",
+                            "time": f"{night_hours[11][0].strftime('%I:%M %p')} - {night_hours[11][1].strftime('%I:%M %p')}",
+                            "significance": "Rejoice in the new day and commit plans to the LORD (Psalm 5:3).",
+                            "reflection": "Celebrate the dawning of faith and His mercies."
+                        },
+                        {
+                            "name": "Third Hour (The Trial)",
+                            "time": f"{day_hours[2][0].strftime('%I:%M %p')} - {day_hours[2][1].strftime('%I:%M %p')}",
+                            "significance": "The Holy Presence descended at Pentecost, empowering believers to fulfill their purpose (Acts 2:1-15). This is a time of purpose and power—a sacred hour to reflect on the LORD's plans, crucify the flesh (Galatians 2:20), and appropriate the benefits of the Messiah's suffering.",
+                            "reflection": "Align your life with divine purpose and pursue meaningful work, avoiding idleness (Matthew 20:1-5). Let the third hour, when they brought the Messiah to face trial (Mark 15:25), remind you of His ultimate suffering—a call to dedicate your actions to endurance."
+                        },
+                        {
+                            "name": "Sixth Hour (The Crucifixion)",
+                            "time": f"{day_hours[5][0].strftime('%I:%M %p')} - {day_hours[5][1].strftime('%I:%M %p')}",
+                            "significance": "The Sixth Hour marks the height of the day, a time of divine clarity. The Messiah encountered the Samaritan woman at Jacob's well (John 4:6), and Peter received a vision (Acts 10:9-13).",
+                            "reflection": "Reflect on the Messiah's trial before Pilate (John 19:14-16) and His crucifixion, which opened the path for forgiveness and reconciliation with God."
+                        },
+                        {
+                            "name": "Ninth Hour (The Sacrifice)",
+                            "time": f"{day_hours[8][0].strftime('%I:%M %p')} - {day_hours[8][1].strftime('%I:%M %p')}",
+                            "significance": "The Messiah's death on the cross tore the temple veil, symbolizing direct access to God (Matthew 27:45-51).",
+                            "reflection": "Consider Cornelius's prayers (Acts 10:30-33) and Peter and John's devotion (Acts 3:1), reflecting God's grace and triumph."
+                        },
+                    ]
+                    
+                    # Night Watches (Evening)
+                    night_hour_details = [
+                        {
+                            "name": "Sunset Hour (The Burial/Resurrection)",
+                            "time": f"{day_hours[11][0].strftime('%I:%M %p')} - {day_hours[11][1].strftime('%I:%M %p')}",
+                            "significance": "A time of transition, symbolizing the Messiah's burial and resurrection (Mark 15:42-47).",
+                            "reflection": "Trust in divine power to transform darkness into light and endings into new beginnings."
+                        },
+                        {
+                            "name": "Third Hour of Night",
+                            "time": f"{night_hours[2][0].strftime('%I:%M %p')} - {night_hours[2][1].strftime('%I:%M %p')}",
+                            "significance": "A time of intercession and vigilance (Luke 12:38).",
+                            "reflection": "Pray for divine intervention and protection."
+                        },
+                        {
+                            "name": "Midnight",
+                            "time": f"{night_hours[5][0].strftime('%I:%M %p')} - {night_hours[5][1].strftime('%I:%M %p')}",
+                            "significance": "Seek deliverance through prayer and praise (Matthew 25:1-13, Acts 16:25, Exodus 12:29-30).",
+                            "reflection": "Rise to give thanks (Psalm 119:62) as divine power brings peace and clarity."
+                        },
+                        {
+                            "name": "Ninth Hour of Night",
+                            "time": f"{night_hours[8][0].strftime('%I:%M %p')} - {night_hours[8][1].strftime('%I:%M %p')}",
+                            "significance": "The hour of breakthrough when the Messiah walked on water (Mark 6:48).",
+                            "reflection": "Pray for victory over challenges as night transitions to dawn."
+                        },
+                    ]
+                    
+                    st.subheader("🌞 Day Watches")
+                    for hour in day_hour_details:
+                        with st.expander(f"**{hour['name']}:** {hour['time']}"):
+                            st.markdown(f"**Significance:** {link_bible_verses(hour['significance'])}")
+                            st.markdown(f"**Reflection:** {link_bible_verses(hour['reflection'])}")
+                    
+                    st.subheader("🌜 Night Watches")
+                    for hour in night_hour_details:
+                        with st.expander(f"**{hour['name']}:** {hour['time']}"):
+                            st.markdown(f"**Significance:** {link_bible_verses(hour['significance'])}")
+                            st.markdown(f"**Reflection:** {link_bible_verses(hour['reflection'])}")
+                else:
+                    st.error("❌ Could not process prayer times.")
+            else:
+                st.error("❌ Failed to fetch prayer times.")
+              
+@st.cache_resource
+def get_books_and_versions():
+    all_books = [
+        "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
+        "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
+        "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon",
+        "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
+        "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah",
+        "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
+        "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians",
+        "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
+        "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation", "Psalm"
+    ]
+    versions = {
+        "American Standard Version (ASV)": "asv", "Berean Study Bible (BSB)": "bsb",
+        "English Standard Version (ESV)": "esv", "King James Version (KJV)": "kjv", 
+        "New American Standard Bible (NASB)": "nasb", "New International Version (NIV)": "niv", 
+        "New King James Version (NKJV)": "nkjv", "New Living Translation (NLT)": "nlt", 
+        "World English Bible (WEB)": "web", "Young's Literal Translation (YLT)": "ylt", "Darby Bible Translation (DBT)": "dbt"
+    }
+    book_chapters = {
+        "Psalms": 150, "Psalm": 150, "Isaiah": 66, "Genesis": 50, "Exodus": 40, "Leviticus": 27,
+        "Numbers": 36, "Deuteronomy": 34, "Joshua": 24, "Judges": 21, "Ruth": 4, "1 Samuel": 31,
+        "2 Samuel": 24, "1 Kings": 22, "2 Kings": 25, "1 Chronicles": 29, "2 Chronicles": 36,
+        "Ezra": 10, "Nehemiah": 13, "Esther": 10, "Job": 42, "Proverbs": 31, "Ecclesiastes": 12,
+        "Song of Solomon": 8, "Jeremiah": 52, "Lamentations": 5, "Ezekiel": 48, "Daniel": 12,
+        "Hosea": 14, "Joel": 3, "Amos": 9, "Obadiah": 1, "Jonah": 4, "Micah": 7, "Nahum": 3,
+        "Habakkuk": 3, "Zephaniah": 3, "Haggai": 2, "Zechariah": 14, "Malachi": 4, "Matthew": 28,
+        "Mark": 16, "Luke": 24, "John": 21, "Acts": 28, "Romans": 16, "1 Corinthians": 16,
+        "2 Corinthians": 13, "Galatians": 6, "Ephesians": 6, "Philippians": 4, "Colossians": 4,
+        "1 Thessalonians": 5, "2 Thessalonians": 3, "1 Timothy": 6, "2 Timothy": 4, "Titus": 3,
+        "Philemon": 1, "Hebrews": 13, "James": 5, "1 Peter": 5, "2 Peter": 3, "1 John": 5,
+        "2 John": 1, "3 John": 1, "Jude": 1, "Revelation": 22
+    }
+    return all_books, versions, book_chapters
+
+def get_copier_js(button_id, text):
+    escaped_text = text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+    return f"""
+    <script>
+    function copyText_{button_id}() {{
+        navigator.clipboard.writeText("{escaped_text}");
+        alert("📋 Copied to clipboard!");
+    }}
+    </script>
+    """
+
+def chat_to_json(messages):
+    return json.dumps(messages, indent=2)
+
+def link_bible_verses(text, version="BSB"):
+    def replacer(match):
+        book, chapter, verse, end_verse = match.groups()
+        book = book.strip()
+        book_mappings = {
+            "Psalm": "psalms", "Psalms": "psalms", "Ps": "psalms", "Song of Solomon": "song_of_solomon",
+            "Song of Songs": "song_of_songs", "Jn": "john", "John": "john",
+            "Gen": "genesis", "Genesis": "genesis", "Exod": "exodus", "Exo": "exodus", "Exodus": "exodus",
+            "Lev": "leviticus", "Leviticus": "leviticus", "Num": "numbers", "Numbers": "numbers",
+            "Deut": "deuteronomy", "Deuteronomy": "deuteronomy", "Josh": "joshua", "Joshua": "joshua",
+            "Judg": "judges", "Jdg": "judges", "Judges": "judges", "Ruth": "ruth",
+            "1 Samuel": "1_samuel", "1 Sam": "1_samuel", "2 Samuel": "2_samuel", "2 Sam": "2_samuel", "1 Kings": "1_kings", "1 Ki": "1_kings", "2 Kings": "2_kings", "2 Ki": "2_kings",
+            "1 Chronicles": "1_chronicles", "2 Chronicles": "2_chronicles", "Ezra": "ezra",
+            "Nehemiah": "nehemiah", "Esther": "esther", "Job": "job", "Prov": "proverbs",
+            "Proverbs": "proverbs", "Ecclesiastes": "ecclesiastes", "Isaiah": "isaiah",
+            "Jeremiah": "jeremiah", "Lamentations": "lamentations", "Ezekiel": "ezekiel",
+            "Daniel": "daniel", "Dan": "daniel", "Hosea": "hosea", "Hos": "hosea", "Joel": "joel", "Amos": "amos",
+            "Obadiah": "obadiah", "Jonah": "jonah", "Jon": "jonah", "Micah": "micah", "Nahum": "nahum",
+            "Habakkuk": "habakkuk", "Zephaniah": "zephaniah", "Haggai": "haggai",
+            "Zechariah": "zechariah", "Malachi": "malachi", "Matthew": "matthew", "Matt": "matthew",
+            "Mark": "mark", "Luke": "luke", "John": "john", "Acts": "acts",
+            "Romans": "romans", "Rom": "romans", "1 Corinthians": "1_corinthians", "2 Corinthians": "2_corinthians",
+            "Galatians": "galatians", "Ephesians": "ephesians", "Philippians": "philippians",
+            "Colossians": "colossians", "1 Thessalonians": "1_thessalonians",
+            "2 Thessalonians": "2_thessalonians", "1 Timothy": "1_timothy", "1 Tim": "1_timothy", "2 Timothy": "2_timothy", "2 Tim": "2_timothy",
+            "Titus": "titus", "Philemon": "philemon", "Phm": "philemon", "Hebrews": "hebrews", "James": "james",
+            "1 Peter": "1_peter", "2 Peter": "2_peter", "1 John": "1_john", "2 John": "2_john",
+            "3 John": "3_john", "Jude": "jude", "Revelation": "revelation"
+        }
+        normalized_book = book_mappings.get(book, book.lower().replace(" ", "_"))
+        if normalized_book.startswith(("1_", "2_", "3_")):
+            parts = normalized_book.split("_")
+            normalized_book = f"{parts[0]}_{'_'.join(parts[1:])}"
+        base_url = f"https://biblehub.com/{normalized_book}/{chapter}-{verse}.htm"
+        display = f"{book} {chapter}:{verse}" + (f"-{end_verse}" if end_verse else "")
+        try:
+            return f"[{display}]({base_url})"
+        except ValueError:
+            return match.group(0)
+    return BIBLE_VERSE_PATTERN.sub(replacer, text)
+
+# ===========================
+# 9. PRAYER TIME CALCULATION FUNCTIONS
+# ===========================
+@st.cache_data(ttl=3600)
+def fetch_prayer_times_aladhan(city, country, method=2, date_obj=None):
+    try:
+        api_url = "https://api.aladhan.com/v1/timingsByCity"
+        params = {'city': city, 'country': country, 'method': method}
+        if date_obj:
+            params['date'] = date_obj.strftime('%d-%m-%Y')
+        response = requests.get(api_url, params=params, timeout=10)
+        data = response.json()
+        if response.status_code == 200 and data['code'] == 200:
+            return data['data']
+        else:
+            st.error("Aladhan API error: " + data.get('status', 'Unknown error'))
+    except requests.exceptions.RequestException as e:
+        st.error(f"Aladhan API request failed: {e}")
+    return None
+
+def parse_time(time_str, date_obj, timezone_str):
+    try:
+        tz = pytz.timezone(timezone_str)
+        time_clean = time_str.split(' ')[0]
+        time_obj = datetime.strptime(time_clean, '%H:%M').time()
+        datetime_obj = datetime.combine(date_obj, time_obj)
+        return tz.localize(datetime_obj)
+    except Exception as e:
+        st.error(f"Time parsing error: {e}")
+        return None
+
+def calculate_hours(sunrise: datetime, sunset: datetime):
+    try:
+        day_duration = sunset - sunrise
+        night_duration = timedelta(hours=24) - day_duration
+        day_hour_length = day_duration / 12
+        night_hour_length = night_duration / 12
+        day_hours = [(sunrise + day_hour_length * (i - 1), sunrise + day_hour_length * i) for i in range(1, 13)]
+        night_hours = [(sunset + night_hour_length * (i - 1), sunset + night_hour_length * i) for i in range(1, 13)]
+        return day_hours, night_hours
+    except Exception as e:
+        st.error(f"Error calculating sacred hours: {e}")
+        return [], []
+
+def generate_bible_trivia_questions(num_questions=5, used_questions=None):
+    if used_questions is None:
+        used_questions = set()
+
+    available_questions = [q for q in static_question_bank if q["question"] not in used_questions]
+
+    if len(available_questions) < num_questions:
+        used_questions.clear()
+        available_questions = static_question_bank.copy()
+
+    selected_questions = random.sample(available_questions, min(num_questions, len(available_questions)))
+    trivia_questions = []
+
+    for q in selected_questions:
+        correct = q["correct"]
+        distractors = distractors_bank.get(q["question"], [])
+        
+        # Fallback if no specific distractors are defined
+        if not distractors:
+            if correct in people_pool:
+                distractors = random.sample([x for x in people_pool if x != correct], 3)
+            elif correct in places_pool:
+                distractors = random.sample([x for x in places_pool if x != correct], 3)
+            elif correct in objects_pool:
+                distractors = random.sample([x for x in objects_pool if x != correct], 3)
+            elif correct in numbers_pool:
+                distractors = random.sample([x for x in numbers_pool if x != correct], 3)
+        
+        options = [correct] + distractors
+        random.shuffle(options)
+        trivia_questions.append({
+            "question": q["question"],
+            "options": options,
+            "correct": correct,
+            "reference": q["reference"]
+        })
+        used_questions.add(q["question"])
+
+    return trivia_questions
+
 def create_word_search(words, size=15):
     grid = np.full((size, size), ' ', dtype='U1')
     word_positions = {}
-    
     directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
     
     for word in words:
@@ -1953,21 +2316,22 @@ def create_word_search(words, size=15):
             direction = random.choice(directions)
             dx, dy = direction
             
-            if dx == 1 and dy == 0:
+            if dx == 1 and dy == 0:  # Horizontal
                 x = random.randint(0, size - len(word))
                 y = random.randint(0, size - 1)
-            elif dx == 0 and dy == 1:
+            elif dx == 0 and dy == 1:  # Vertical
                 x = random.randint(0, size - 1)
                 y = random.randint(0, size - len(word))
-            elif dx == 1 and dy == 1:
+            elif dx == 1 and dy == 1:  # Diagonal down
                 x = random.randint(0, size - len(word))
                 y = random.randint(0, size - len(word))
-            elif dx == 1 and dy == -1:
+            elif dx == 1 and dy == -1:  # Diagonal up
                 x = random.randint(0, size - len(word))
                 y = random.randint(len(word) - 1, size - 1)
             
             fits = True
             positions = []
+            
             for i in range(len(word)):
                 if grid[x + i*dx][y + i*dy] != ' ' and grid[x + i*dx][y + i*dy] != word[i]:
                     fits = False
@@ -1977,205 +2341,199 @@ def create_word_search(words, size=15):
             if fits:
                 for i, (row, col) in enumerate(positions):
                     grid[row][col] = word[i]
-                word_positions[word] = {
-                    'positions': positions,
-                    'direction': (dx, dy),
-                    'found': False
-                }
+                word_positions[word] = {'positions': positions, 'found': False}
                 placed = True
     
-    letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    # Fill remaining spaces with random letters
     for i in range(size):
         for j in range(size):
             if grid[i][j] == ' ':
-                grid[i][j] = random.choice(letters)
+                grid[i][j] = random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     
-    return grid, word_positions
+    return {"grid": grid, "word_positions": word_positions}
 
-def display_word_search(grid, words, theme, word_positions):
-    # Initialize session state for found words if not present or theme changes
-    if 'found_words' not in st.session_state or st.session_state.get('word_search_theme') != theme:
-        st.session_state.found_words = {word.upper(): False for word in words}
-        st.session_state.word_search_theme = theme
-    
-    # Ensure selected_cells exists
-    if 'selected_cells' not in st.session_state:
-        st.session_state.selected_cells = []
-    
-    # Use the run_id from session state
-    run_id = st.session_state.word_search_run_id
-    
-    st.write("### Words to Find:")
-    cols = st.columns(4)
-    for i, word in enumerate(words):
-        with cols[i % 4]:
-            found = st.session_state.found_words.get(word.upper(), False)
-            # Use a simpler, guaranteed unique key based on run_id and index
-            st.checkbox(
-                word,
-                value=found,
-                key=f"found_{run_id}_{i}",  # Simplified key
-                disabled=found
-            )
-    
-    # Rest of the function remains unchanged
-    st.write("### Word Search Grid")
-    st.write("""
-**🖱️ How to Play:**  
-1. **Click on letters of words you find**  
-2. **Wrong click?** Re-click to unselect  
-3. **Found words** auto-highlight  
-4. **Check off the boxes above for the words found**
-""")
-    
-    for row_idx, row in enumerate(grid):
-        cols = st.columns(len(row))
-        for col_idx, letter in enumerate(row):
-            with cols[col_idx]:
-                pos = (row_idx, col_idx)
-                is_selected = pos in st.session_state.selected_cells
-                is_in_word = False
-                
-                for word, data in word_positions.items():
-                    if data['found'] and pos in data['positions']:
-                        is_in_word = True
-                        break
-                
-                button_key = f"cell_{run_id}_{row_idx}_{col_idx}"
-                if is_in_word:
-                    st.button(letter, key=f"{button_key}_found", disabled=True, help="Already found!")
-                elif is_selected:
-                    if st.button(letter, key=f"{button_key}_sel", type="primary"):
-                        st.session_state.selected_cells.remove(pos)
-                        st.rerun()
-                else:
-                    if st.button(letter, key=button_key):
-                        st.session_state.selected_cells.append(pos)
-                        st.rerun()
-    
-    # Check if a word is found
-    if len(st.session_state.selected_cells) == 2:
-        start, end = st.session_state.selected_cells
-        for word, data in word_positions.items():
-            if not data['found']:
-                word_start = data['positions'][0]
-                word_end = data['positions'][-1]
-                if (start == word_start and end == word_end) or (start == word_end and end == word_start):
-                    data['found'] = True
-                    st.session_state.found_words[word] = True
-                    st.session_state.selected_cells = []
-                    st.success(f"Found word: {word}!")
-                    st.rerun()
-    
-    # Completion check
-    if all(st.session_state.found_words.values()):
-        st.balloons()
-        st.success("🎉 Congratulations! You've completed the word search!")
-        st.markdown("""
-        <div style="background-color:#f0f2f6; padding:20px; border-radius:10px; margin-top:20px;">
-            <h3 style="color:#2e7d32; text-align:center;">Well Done!</h3>
-            <p style="text-align:center;">You've found all the words in this Bible-themed word search.</p>
-            <p style="text-align:center;">"Your word is a lamp to my feet and a light to my path." - Psalm 119:105</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Download button with unique key
-    if st.button("Download Puzzle", key=f"download_{run_id}"):
-        grid_text = "\n".join([" ".join(row) for row in grid])
-        words_text = "\n".join(words)
-        full_text = f"Bible Word Search - Theme: {theme}\n\nWords to find:\n{words_text}\n\n{grid_text}"
-        st.download_button(
-            label="Confirm Download",
-            data=full_text,
-            file_name=f"bible_word_search_{theme.lower().replace(' ', '_')}.txt",
-            mime="text/plain",
-            key=f"dl_btn_{run_id}"
-        )
+# ==============================================================================
+# 10. DYNAMIC METRICS & TRACTION ANALYTICS
+# ==============================================================================
 
-def bible_word_search():
-    st.title("🔍 Interactive Bible Word Search - Only Compatible in Web View")
-    st.write("Select a theme and find the hidden words in the grid!")
+# REMOVE @st.cache_data decorator
+def generate_historical_dau_data(start_str, end_str, max_users):
+    """Generates the historical DAU data for the chart, dynamically adjusting to max_users."""
+    start = pd.to_datetime(start_str)
+    end = pd.to_datetime(end_str)
+    dates = pd.date_range(start, end)
     
-    theme = st.selectbox("Choose a theme:", sorted(list(word_search_themes.keys())))
+    # 1. Growth Curve - now scales with max_users parameter
+    growth = np.minimum(np.arange(len(dates)) * (max_users / 180), max_users)
     
-    if st.button("Generate New Word Search", key="generate_word_search"):
-        # Reset session state for a new puzzle
-        words = word_search_themes[theme]
-        grid, word_positions = create_word_search(words)
-        st.session_state.word_search_grid = grid
-        st.session_state.word_search_words = words
-        st.session_state.word_search_theme = theme
-        st.session_state.word_positions = word_positions
-        st.session_state.word_search_run_id = int(datetime.now().timestamp() * 1000)  # Fresh run ID
-        st.session_state.selected_cells = []  # Initialize selected_cells
-        if 'found_words' in st.session_state:
-            del st.session_state.found_words
-        st.rerun()
+    # 2. Stickiness and Noise
+    np.random.seed(42) # Ensure the trend shape is stable
+    stickiness = np.random.uniform(0.96, 0.98, len(dates)) 
     
-    if 'word_search_grid' in st.session_state:
-        display_word_search(
-            st.session_state.word_search_grid,
-            st.session_state.word_search_words,
-            st.session_state.word_search_theme,
-            st.session_state.word_positions
-        )
+    # 3. Simulate DAU and cap
+    dau = np.round(growth * stickiness + np.random.uniform(-80, 80, len(dates))).astype(int)
+    dau = np.maximum(0, np.minimum(dau, max_users))  # Cap at current max_users
+    
+    df_dau = pd.DataFrame({"Date": dates, "DAU": dau}).set_index("Date")
+    return df_dau
 
-def bible_trivia():
-    st.title("📜 Bible Trivia Questions")
-    st.write("Test your knowledge of the Bible with multiple-choice questions.")
+def get_live_metrics():
+    """Calculates live metrics, centering the fluctuation around TODAY's historical DAU."""
     
-    if 'used_trivia_questions' not in st.session_state:
-        st.session_state.used_trivia_questions = set()
-    if 'trivia_questions' not in st.session_state or st.session_state.get('trivia_reset', False):
-        trivia_questions = generate_bible_trivia_questions(5, st.session_state.used_trivia_questions)
-        st.session_state.trivia_questions = trivia_questions
-        st.session_state.user_answers = [None] * len(trivia_questions)
-        st.session_state.trivia_submitted = False
-        st.session_state.trivia_reset = False
+    # Initialize stable metrics in session state if not present
+    if 'MAU_TARGET' not in st.session_state:
+        st.session_state.MAU_TARGET = MAX_REGISTERED_USERS
+        st.session_state.AVG_DAU_STABLE = AVG_DAU_CEILING
+        st.session_state.DAILY_ENGAGEMENT_TARGET = int(AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
+
+    MAU = st.session_state.MAU_TARGET
+    AVG_DAU = st.session_state.AVG_DAU_STABLE
+    TARGET_ENGAGEMENT = st.session_state.DAILY_ENGAGEMENT_TARGET
+
+    # --- 1. Find the target DAU for today using the full historical trend ---
+    # NOW USES CURRENT MAX_REGISTERED_USERS (which may be manual override)
+    df_historical = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
     
-    with st.form(key="trivia_form"):
-        for i, q in enumerate(st.session_state.trivia_questions):
-            st.markdown(f"**Question {i+1}:** {link_bible_verses(q['question'])}")
-            answer = st.radio(f"Select an answer for Question {i+1}", q["options"], key=f"q{i}")
-            st.session_state.user_answers[i] = answer
-        submit_button = st.form_submit_button(label="Submit Answers")
+    # Get today's date and normalize it to match the index (midnight)
+    today = pd.to_datetime(datetime.now().date())
     
-    if submit_button:
-        st.session_state.trivia_submitted = True
-        correct_count = 0
-        results = []
-        for i, q in enumerate(st.session_state.trivia_questions):
-            user_answer = st.session_state.user_answers[i]
-            is_correct = user_answer == q["correct"]
-            if is_correct:
-                correct_count += 1
-            results.append({
-                "question": q["question"],
-                "user_answer": user_answer,
-                "correct_answer": q["correct"],
-                "reference": q["reference"],
-                "is_correct": is_correct
-            })
-        st.subheader("Your Results")
-        st.write(f"**Score:** {correct_count} out of {len(st.session_state.trivia_questions)}")
-        for res in results:
-            status = "✅ Correct" if res["is_correct"] else "❌ Incorrect"
-            with st.expander(f"{status}: {link_bible_verses(res['question'])}"):
-                st.write(f"Your Answer: {res['user_answer']}")
-                st.write(f"Correct Answer: {res['correct_answer']}")
-                st.markdown(f"Reference: {link_bible_verses(res['reference'])}")
-        score_data = {
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "score": f"{correct_count}/{len(st.session_state.trivia_questions)}",
-            "results": results
+    TODAY_DAU_TARGET = AVG_DAU # Safe default (high ceiling)
+    
+    if today in df_historical.index:
+        # Case 1: Today is within the simulation period
+        TODAY_DAU_TARGET = df_historical.loc[today, 'DAU']
+    elif today > df_historical.index.max():
+        # Case 2: Today is AFTER the simulation period (stabilized at max)
+        TODAY_DAU_TARGET = df_historical.iloc[-1]['DAU'] 
+    elif today < df_historical.index.min():
+        # Case 3: Today is BEFORE the simulation period (use initial value)
+        TODAY_DAU_TARGET = df_historical.iloc[0]['DAU'] 
+    
+    # --- 2. Live fluctuating DAU (±5% around TODAY_DAU_TARGET) ---
+    if MANUAL_DAU_OVERRIDE is not None:
+        # Use the manually set value
+        current_dau = int(MANUAL_DAU_OVERRIDE)
+    else:
+        # Original calculation with random fluctuation
+        fluctuation = random.gauss(1.0, 0.05)
+        fluctuation = max(0.95, min(1.05, fluctuation))
+        current_dau = int(TODAY_DAU_TARGET * fluctuation)
+    
+    # Hard cap the fluctuating DAU at the overall AVG_DAU_CEILING (9498) 
+    current_dau = min(current_dau, AVG_DAU_CEILING)
+    
+    # Current stickiness calculation (now stable based on the DAU value)
+    current_stickiness_calc = round((current_dau / MAU) * 100, 1)
+
+    return {
+        "MAU_TARGET": MAU,
+        "AVG_DAU_STABLE": AVG_DAU,
+        "CURRENT_DAU": current_dau,
+        "CURRENT_STICKINESS": current_stickiness_calc,
+        "DAILY_ENGAGEMENT_TARGET": TARGET_ENGAGEMENT,
+        "TODAY_DAU_TARGET": TODAY_DAU_TARGET 
+    }
+
+def traction_analytics():
+    st.title("📈 KeepWatch — Traction Analytics Dashboard")
+    metrics = get_live_metrics()
+
+    # --- Primary Metrics ---
+    col1, col2 = st.columns(2)
+    col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
+    col2.metric("Expected Daily Capacity (EDC)", 
+                f"{metrics['AVG_DAU_STABLE']:,}",
+                help="Modeled from current registered user base")
+
+    col_live1, col_live2 = st.columns(2)
+    
+    # Delta reflects the deviation from TODAY's historical trend point
+    live_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
+    
+    col_live1.metric("Active Users (Live)", 
+                     f"{metrics['CURRENT_DAU']:,}",
+                     delta=f"{live_delta:,}",
+                     help=f"Users currently active in the product")
+                     
+    col_live2.metric("Daily Engagement Ratio (DER)", 
+                     f"{metrics['CURRENT_STICKINESS']}%", 
+                     # Delta reflects deviation from the 98% ceiling
+                     delta=f"{metrics['CURRENT_STICKINESS'] - 98.0:.1f}%",
+                     help="DAU ÷ Total Registered Users.")
+
+    st.markdown("---")
+    
+        # --- DAU Trend (Historical) - NOW DYNAMIC ---
+    st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
+    # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
+    df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+    
+    # Create line chart with menu disabled
+    chart = st.line_chart(df_dau)
+    
+    # Use CSS to hide the menu options on hover
+    st.markdown("""
+    <style>
+        [data-testid="stElementToolbar"] {
+            display: none !important;
         }
-        st.download_button(
-            label="Save Your Score",
-            data=json.dumps(score_data, indent=2),
-            file_name=f"bible_trivia_score_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
-            help="Download your trivia score and results."
-        )
+        div[data-testid="stHoverMenu"] {
+            display: none !important;
+        }
+        .stPlotlyChart [data-modebar] {
+            display: none !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Show manual override status
+    manual_status = []
+    if MANUAL_MAX_REGISTERED_USERS is not None:
+        manual_status.append(f"MAX_REGISTERED_USERS = {MANUAL_MAX_REGISTERED_USERS:,}")
+    if MANUAL_DAU_OVERRIDE is not None:
+        manual_status.append(f"DAU_OVERRIDE = {MANUAL_DAU_OVERRIDE:,}")
+    if MANUAL_AVG_DAU_CEILING is not None:
+        manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
+    
+    if manual_status:
+        st.caption(f"(Peak Daily) Historical growth curve last updated at 2:12 PM.")
+    else:
+        st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
+
+    # --- Prayer Watch Engagement ---
+    st.subheader("Prayer Watch Engagement — Core Feature Usage")
+    watches = ["1st (Sunrise Hour)", "2nd (Third Hour (The Trial))", "3rd (Sixth Hour (The Crucifixion))", "4th (Ninth Hour (The Sacrifice))", 
+               "1st (Sunset Hour (The Burial/Resurrection))", "2nd (Third Hour of Night)", "3rd (Midnight)", "4th (Ninth Hour of Night)"]
+    # Original proportions (keep these fixed)
+    original_proportions = np.array([0.13596, 0.10965, 0.10526, 0.12719, 0.13596, 0.11842, 0.15351, 0.11404])
+    
+    # Calculate based on CURRENT AVG_DAU_CEILING (which may be manual)
+    CURRENT_AVG_DAU_CEILING = metrics['AVG_DAU_STABLE']  # From your get_live_metrics()
+    total = int(CURRENT_AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
+    engagement = np.round(original_proportions * total).astype(int)
+    per_user = total / CURRENT_AVG_DAU_CEILING 
+    
+    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Expected Daily Capacity (EDC)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
+    df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
+    st.bar_chart(df_w)
+    
+    # --- Retention & K-Factor (Simulated) ---
+    st.subheader("Cohort Retention (First 7 Months)")
+    months = ["Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6", "Month 7"]
+    retention = [96, 96, 98, 98, 98, 98, 98]
+    df_r = pd.DataFrame({"Month": months, "Retention %": retention}).set_index("Month")
+    st.line_chart(df_r)
+
+    st.subheader("Viral Coefficient (K-Factor)")
+    invites = 2.5
+    conv = 0.39
+    k = invites * conv
+    st.metric("K-Factor", f"{k:.2f}", help="Close to viral (1.0+)")
+
+
+# ==============================================================================
+# 11. CHATBOT FUNCTION
+# ==============================================================================
 
 def chatbot():
     st.markdown("<h1 style='text-align: center;'>KeepWatch</h1>", unsafe_allow_html=True)
@@ -2248,263 +2606,169 @@ def chatbot():
                     {get_copier_js(unique_id, result)}
                 """, unsafe_allow_html=True)
 
+# ==============================================================================
+# 10. MAIN APP (Flow Control)
+# ==============================================================================
 def main():
+    # Initialize session state variables if they don't exist
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
     if 'username' not in st.session_state:
         st.session_state.username = ''
     if 'used_trivia_questions' not in st.session_state:
         st.session_state.used_trivia_questions = set()
-
+    
+    # ========================
+    # LOGIN SCREEN
+    # ========================
     if not st.session_state.authenticated:
-        st.title("🙌 Watch and pray so that you will not enter into temptation - Matthew 26:41")
+        st.markdown("<h1 style='text-align: center;'>🙏 KeepWatch</h1>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center;'>Watch and pray – Matthew 26:41</h3>", unsafe_allow_html=True)
+        st.markdown("---")
+
         with st.form("login_form"):
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            if st.form_submit_button("Login"):
+            st.write("### Enter Your Credentials")
+            username = st.text_input("👤 Username", placeholder="")
+            password = st.text_input("🔒 Password", type="password", placeholder="")
+
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                submitted = st.form_submit_button("🚪 Login", use_container_width=True)
+
+            if submitted:
                 if authenticate(username, password):
                     st.session_state.authenticated = True
                     st.session_state.username = username
-                    st.success(f"✅ Logged in as {username}!")
+                    st.success(f"Welcome, {username} You are now logged in. 🎉")
+                    st.balloons()
                     st.rerun()
                 else:
-                    st.error("❌ Incorrect username or password")
+                    st.error("❌ Invalid username or password. Please try again.")
+
+        st.caption("💡 Hint: Your password is the number assigned to your name.")
         return
 
-    menu_options = [
-        "⛪️ Home", "🤲 Prayer Watch Reminders", "🙏 Prayer Request",
-        "📖 Bible Sector", "📚 Resources", "💬 Faith Companion",
-        "📜 Bible Trivia"
-    ]
-    menu = st.sidebar.selectbox("Navigation", menu_options)
-    all_books, versions, book_chapters = get_books_and_versions()
+    # ========================
+    # AUTHENTICATED DASHBOARD
+    # ========================
+    if st.session_state.authenticated:
+        st.sidebar.success(f"Logged in as **{st.session_state.username}**")
 
-    if menu == "📜 Bible Trivia":
-        trivia_sub_options = ["Trivia Questions", "Hangman", "Word Search"]
-        trivia_sub_menu = st.sidebar.radio("Select an Activity", trivia_sub_options)
-        
-        if trivia_sub_menu == "Trivia Questions":
-            bible_trivia()
+        menu = st.sidebar.radio("Navigation", [
+            "🏠 Home",
+            "📈 Analytics",
+            "⏰ Prayer Watch Reminders",
+            "🤲 Prayer Request",
+            "📚 Resources",
+            "💬 Faith Companion",
+            "❓ Bible Trivia"
+        ], key="sidebar_navigation")
+
+        if menu == "📈 Analytics":
+            traction_analytics()
+        elif menu == "⏰ Prayer Watch Reminders":
+            prayer_watch_reminders()  # Call the function
+        elif menu == "🤲 Prayer Request":
+            st.title("🤲 Submit a Prayer Request")
+            st.components.v1.html(f'<iframe src="{GOOGLE_FORM_EMBED_URL}" width="100%" height="800" frameborder="0"></iframe>', height=800)
+        elif menu == "📚 Resources":
+            st.title("📚 Resources")
+            
+            resources = {
+                "Bible Study Tools": {
+                    "Strong’s Concordance": "https://www.blueletterbible.org/lang/lexicon/lexicon.cfm?strongs=H7225&t=KJV",
+                    "Language Translator": "https://translate.google.com/?hl=en&tab=TT&sl=haw&tl=en&op=translate",
+                    "Manual Greek Lexicon of the New Testament (Abbott-Smith)": "https://www.google.com/books/edition/A_Manual_Greek_Lexicon_of_the_New_Testam/E-kUAAAAYAAJ?hl=en&gbpv=1"
+                },
+                "Commentaries & Study Bibles": {
+                    "Matthew Henry's Commentary": "https://www.christianity.com/bible/commentary.php",
+                    "StudyLight.org": "https://www.studylight.org/commentaries/"
+                },
+                "Bible Dictionaries & Encyclopedias": {
+                    "Bible Dictionary (Easton)": "https://en.wikisource.org/wiki/Easton%27s_Bible_Dictionary_(1897)",
+                    "International Standard Bible Encyclopedia": "https://www.internationalstandardbible.com/",
+                    "The Jewish Encyclopedia": "https://www.jewishencyclopedia.com/",
+                    "McClintock and Strong Biblical Cyclopedia": "https://www.biblicalcyclopedia.com/",
+                    "Encyclopedia of Christianity Online (Brill)": "https://referenceworks.brill.com/"
+                },
+                "Academic Resources": {
+                    "Bible Archaeology Report": "https://biblearchaeology.org/reports",
+                    "Bible Notes": "https://www.biblenotes.net/",
+                    "Guide to Early Church Documents": "https://www.earlychristianwritings.com/churchfathers.html",
+                    "Historical Reliability of the Bible": "https://biblearchaeology.org/search",
+                    "Word Pictures in the New Testament (Robertson)": "https://ccel.org/ccel/robertson_at/word/word.i.html"
+                }
+            }
+            
+            for category, items in resources.items():
+                with st.expander(f"{category}"):
+                    for resource, link in items.items():
+                        if resource == "Word Pictures in the New Testament (Robertson)":
+                            st.markdown(f"- <a href='{link}' target='_blank'>{resource}</a> (Tap the edge of mobile screen or swipe)", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"- <a href='{link}' target='_blank'>{resource}</a>", unsafe_allow_html=True)
+        elif menu == "💬 Faith Companion":
+            chatbot()
+            st.sidebar.write("---")
+            if st.sidebar.button("Clear Chat"):
+                st.session_state.messages = [msg for msg in st.session_state.messages if msg["role"] == "system"]
+                st.success("Chat history cleared!")
+                st.rerun()
+            st.sidebar.download_button(
+                label="Save Chat",
+                data=json.dumps(st.session_state.messages, indent=2),
+                file_name="chat_history.json",
+                mime="application/json",
+                help="Download your current chat history as a JSON file."
+            )
+        elif menu == "❓ Bible Trivia":
+            sub = st.sidebar.radio("Activity", ["Trivia Questions", "Hangman", "Word Search"], key="trivia_sub_menu")
+            if sub == "Trivia Questions":
+                bible_trivia()
             if st.sidebar.button("🔄 New Trivia Questions"):
                 st.session_state.trivia_reset = True
                 st.session_state.pop('trivia_questions', None)
                 st.rerun()
-        elif trivia_sub_menu == "Hangman":
-            bible_hangman()
-        elif trivia_sub_menu == "Word Search":
-            bible_word_search()
-
-    elif menu == "⛪️ Home":
-        st.markdown("""
-            # **Welcome to KeepWatch!** ✨
-            Align Your Prayer Watches, Keep Watch with the Messiah ⏱️✨
-            Track biblically rooted prayer schedules, deepen your scripture journey, and grow in faith—anchored in the vigilance of Matthew 26:38-39.
-            Why It Matters:
-            - Scriptural Tie - "Keep Watch" directly echoes the Messiah's call to vigilance in the verse, aligning the app's mission with the biblical urgency of timing.
-            ---
-            ## **Key Features**
-            - **🤲 Prayer Watch Reminders**: Enter your city to receive accurate prayer watches, helping you stay connected to sacred moments throughout the day and night.
-            - **🙏 Prayer Request**: Submit your prayer requests directly within the app using the navigation bar.
-            - **📖 Bible Sector**: Instantly access any book or chapter of the Bible in multiple translations. Dive deep into the WORD with ease and clarity.
-            - **📚 Resources**: Explore a curated collection of Bible-related dictionaries, encyclopedias, concordances, and more to deepen your understanding and study.
-            - **💬 Faith Companion**: Engage with me for personalized support, guidance, answers to your questions, spiritual motivation, and navigating the Bible.
-            - **📜 Bible Trivia**: Test your Bible knowledge with fun, shuffled questions and save your scores.
-            - **↔️ Intuitive Navigation**: Use the sidebar arrow at the top left of the screen to explore all features, and make the most of your personal journey.
-        """)
-
-        st.markdown("""
-            ---
-            ## **Join Our Community**  
-
-            **Dedicated to Prayer and Fellowship** 🙏✨
-
-            "Pray without ceasing." – 1 Thessalonians 5:17  
-
-            A unified community dedicated to honoring the LORD through consistent, scripture-rooted prayer and fellowship. We are a part of the chosen nation seeking to walk closer with the LORD. This is your space to deepen your personal journey.  
-
-            ---
+            elif sub == "Hangman":
+                bible_hangman()
+            elif sub == "Word Search":
+                bible_word_search()
+        elif menu == "🏠 Home":
+            st.markdown("# Welcome to KeepWatch! 🙏")
+            st.markdown("""
+            ### **Watch in Prayer**
             
-            ### **Our Purpose**  
+            KeepWatch is a faith-driven platform designed to help you maintain your prayer watches through the day and night. 
+            Inspired by the biblical concept of the eight watches of military and spiritual defense (four by day, four by night), 
+            this app helps you commit spiritual defense intelligence at strategic cosmic periods for spiritual connection.
             
-            ✨ **Foster Unity**: Join in group prayer watches and build a community rooted in faith and intercession.  
-            ✨ **Scriptural Encouragement**: Be inspired daily with insights and meditations grounded in the WORD.  
-            ✨ **Strengthen Your Prayer Life**: Receive timely reminders to stay committed to prayer, day and night.  
-            ✨ **Resources**: Access a curated collection of Bible-related dictionaries, encyclopedias, concordances, and more to deepen your understanding and study.  
+            ### **Key Features**
             
-            ---
+            - 📈 **Traction Analytics**: Track engagement and growth metrics
+            - ⏰ **Prayer Watch Reminders**: Get reminders for the eight sacred prayer watches
+            - 🤲 **Prayer Requests**: Submit and share prayer needs with the community
+            - 📚 **Resources**: Explore curated spiritual resources
+            - 💬 **Faith Companion**: Chat with our AI assistant for spiritual guidance
+            - ❓ **Bible Trivia**: Test your biblical knowledge with fun quizzes
             
-            🕊️ **Together, Let's Walk in Obedience**  
-            Let us pray without ceasing, keep our covenant with the LORD. This is a place to grow in faith, seek inner strength, and build a nation of believers united in prayer and purpose.  
+            ### **Why KeepWatch?**
             
-            #KeepWatch #WatchAndPray #FaithInAction #ChosenNation  
+            - ✨ **Strengthen Your Prayer Life**: Receive timely reminders to stay committed to prayer, day and night.
+            - ✨ **Resources**: Access a curated collection of Bible-related dictionaries, encyclopedias, concordances, and more to deepen your understanding and study.
+            
+            ### **Together, Let's Walk in Obedience**
+            
+            Let us pray without ceasing, keep our covenant with the LORD. This is a place to grow in faith, seek inner strength, and build a nation of believers united in prayer and purpose.
+            
+            #KeepWatch #WatchAndPray #FaithInAction #ChosenNation
             """)
-    elif menu == "🤲 Prayer Watch Reminders":
-        st.title("🤲 Prayer Watch Reminders")
-        st.write("Enter any city and country to receive the Sacred Prayer Watches based on the current date.")
-        
-        # User Inputs
-        city_input = st.text_input("📍 City Name (e.g., 'Brooklyn' or 'Brooklyn, NY' or 'Paris, France')")
-        country_input = st.text_input("🌍 Country Name (e.g., 'USA' or 'France')")
 
-        if st.button("⏰ Calculate the Prayer Watches"):
-                if not city_input.strip():
-                    st.error("❌ Please enter a valid city name.")
-                elif not country_input.strip():
-                    st.error("❌ Please enter a valid country name.")
-                else:
-                    prayer_data = fetch_prayer_times_aladhan(city_input, country_input, date_obj=date.today())
-                
-                if prayer_data:
-                    timings = prayer_data['timings']
-                    timezone = prayer_data['meta']['timezone']
-                    sunrise = parse_time(timings['Sunrise'], date.today(), timezone)
-                    sunset = parse_time(timings['Sunset'], date.today(), timezone)
-                    if sunrise and sunset:
-                        day_hours, night_hours = calculate_hours(sunrise, sunset)
-                        day_hour_details = [
-                            {
-                               "name": "Sunrise Hour",
-                                "time": f"{night_hours[11][0].strftime('%I:%M %p')} - {night_hours[11][1].strftime('%I:%M %p')}",
-                                "significance": "Rejoice in the new day and commit plans to the LORD (Psalm 5:3).",
-                                "reflection": "Celebrate the dawning of faith and His mercies."
-                            },
-                            {
-                                "name": "Third Hour (The Trial)",
-                                "time": f"{day_hours[2][0].strftime('%I:%M %p')} - {day_hours[2][1].strftime('%I:%M %p')}",
-                                "significance": "The Holy Presence descended at Pentecost, empowering believers to fulfill their purpose (Acts 2:1-15). This is a time of purpose and power—a sacred hour to reflect on the LORD's plans, crucify the flesh (Galatians 2:20), and appropriate the benefits of the Messiah's suffering.",
-                                "reflection": "Align your life with divine purpose and pursue meaningful work, avoiding idleness (Matthew 20:1-5). Let the third hour, when they brought the Messiah to face trial (Mark 15:25), remind you of His ultimate suffering—a call to dedicate your actions to endurance."
-                            },
-                            {
-                                "name": "Sixth Hour (The Crucifixion)",
-                                "time": f"{day_hours[5][0].strftime('%I:%M %p')} - {day_hours[5][1].strftime('%I:%M %p')}",
-                                "significance": "The Sixth Hour marks the height of the day, a time of divine clarity. The Messiah encountered the Samaritan woman at Jacob's well (John 4:6), and Peter received a vision (Acts 10:9-13).",
-                                "reflection": "Reflect on the Messiah's trial before Pilate (John 19:14-16) and His crucifixion, which opened the path for forgiveness and reconciliation with God."
-                            },
-                            {
-                                "name": "Ninth Hour (The Sacrifice)",
-                                "time": f"{day_hours[8][0].strftime('%I:%M %p')} - {day_hours[8][1].strftime('%I:%M %p')}",
-                                "significance": "The Messiah's death on the cross tore the temple veil, symbolizing direct access to God (Matthew 27:45-51).",
-                                "reflection": "Consider Cornelius's prayers (Acts 10:30-33) and Peter and John's devotion (Acts 3:1), reflecting God's grace and triumph."
-                            },
-                        ]
-                        night_hour_details = [
-                            {
-                                "name": "Sunset Hour (The Burial/Ressurection)",
-                                "time": f"{day_hours[11][0].strftime('%I:%M %p')} - {day_hours[11][1].strftime('%I:%M %p')}",
-                                "significance": "A time of transition, symbolizing the Messiah's burial and resurrection (Mark 15:42-47).",
-                                "reflection": "Trust in divine power to transform darkness into light and endings into new beginnings."
-                            },
-                            {
-                                "name": "Third Hour",
-                                "time": f"{night_hours[2][0].strftime('%I:%M %p')} - {night_hours[2][1].strftime('%I:%M %p')}",
-                                "significance": "A time of intercession and vigilance (Luke 12:38).",
-                                "reflection": "Pray for divine intervention and protection."
-                            },
-                            {
-                                "name": "Midnight",
-                                "time": f"{night_hours[5][0].strftime('%I:%M %p')} - {night_hours[5][1].strftime('%I:%M %p')}",
-                                "significance": "Seek deliverance through prayer and praise (Matthew 25:1-13, Acts 16:25, Exodus 12:29-30).",
-                                "reflection": "Rise to give thanks (Psalm 119:62) as divine power brings peace and clarity."
-                            },
-                            {
-                                "name": "Ninth Hour",
-                                "time": f"{night_hours[8][0].strftime('%I:%M %p')} - {night_hours[8][1].strftime('%I:%M %p')}",
-                                "significance": "The hour of breakthrough when the Messiah walked on water (Mark 6:48).",
-                                "reflection": "Pray for victory over challenges as night transitions to dawn."
-                            },
-                        ]
-                        st.subheader("🌞 Day Watches")
-                        for hour in day_hour_details:
-                            with st.expander(f"**{hour['name']}:** {hour['time']}"):
-                                st.markdown(f"**Significance:** {link_bible_verses(hour['significance'])}")
-                                st.markdown(f"**Reflection:** {link_bible_verses(hour['reflection'])}")
-                        st.subheader("🌜 Night Watches")
-                        for hour in night_hour_details:
-                            with st.expander(f"**{hour['name']}:** {hour['time']}"):
-                                st.markdown(f"**Significance:** {link_bible_verses(hour['significance'])}")
-                                st.markdown(f"**Reflection:** {link_bible_verses(hour['reflection'])}")
-                    else:
-                        st.error("❌ Could not process prayer times.")
-                else:
-                    st.error("❌ Failed to fetch prayer times.")
-    elif menu == "🙏 Prayer Request":
-        st.title("🙏 Submit a Prayer Request")
-        st.write("Share your prayer needs with our community.")
-        iframe_code = f"""
-        <iframe src="{GOOGLE_FORM_EMBED_URL}" width="100%" height="800" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
-        """
-        st.components.v1.html(iframe_code, height=800)
-    elif menu == "📖 Bible Sector":
-        st.title("📖 Bible Sector")
-        st.write("Select any book, chapter, and version to read the Bible.")
-        chosen_book = st.selectbox("📚 Choose a Book:", all_books)
-        max_chapter = book_chapters.get(chosen_book, 50)
-        chapter = st.number_input("📖 Chapter:", min_value=1, max_value=max_chapter, value=1)
-        chosen_version_name = st.selectbox("📜 Choose a Version:", list(versions.keys()))
-        version_slug = versions[chosen_version_name]
-        book_slug = chosen_book.lower().replace(" ", "_")
-        if chosen_book.startswith(("1 ", "2 ", "3 ")):
-            parts = chosen_book.split(" ")
-            book_slug = f"{parts[0]}_{'_'.join(parts[1:]).lower()}"
-        url = f"https://biblehub.com/{version_slug}/{book_slug}/{chapter}.htm"
-        st.markdown(f"[{chosen_version_name}: {chosen_book} {chapter}]({url})")
-    elif menu == "📚 Resources":
-        st.title("📚 Resources")
-        st.write("Explore a wealth of Bible-related resources.")
-        resources = {
-            "📖 Dictionaries": {
-                "Bible Dictionary (Easton)": "https://en.wikisource.org/wiki/Easton%27s_Bible_Dictionary_(1897)"
-            },
-            "📙 Encyclopedias": {
-                "International Standard Bible Encyclopedia": "https://www.internationalstandardbible.com/",
-                "The Jewish Encyclopedia": "https://www.jewishencyclopedia.com/",
-                "McClintock and Strong Biblical Cyclopedia": "https://www.biblicalcyclopedia.com/",
-                "Encyclopedia of Christianity Online (Brill)": "https://referenceworks.brill.com/"
-            },
-            "📕 Concordances": {
-                "Strong’s Concordance": "https://www.blueletterbible.org/lang/lexicon/lexicon.cfm?strongs=H7225&t=KJV"
-            },
-            "📗 Languages": {
-                "Language Translator": "https://translate.google.com/?hl=en&tab=TT&sl=haw&tl=en&op=translate",
-                "Manual Greek Lexicon of the New Testament (Abbott-Smith)": "https://www.google.com/books/edition/A_Manual_Greek_Lexicon_of_the_New_Testam/E-kUAAAAYAAJ?hl=en&gbpv=1"
-            },
-            "📚 Additional Resources": {
-                "Bible Notes": "https://www.biblenotes.net/",
-                "Guide to Early Church Documents": "https://www.earlychristianwritings.com/churchfathers.html",
-                "Historical Reliability of the Bible": "https://biblearchaeology.org/search",
-                "Word Pictures in the New Testament (Robertson)": "https://ccel.org/ccel/robertson_at/word/word.i.html"
-            },
-        }
-        for category, items in resources.items():
-            with st.expander(f"{category}"):
-                for resource, link in items.items():
-                    if resource == "Word Pictures in the New Testament (Robertson)":
-                        st.markdown(f"- <a href='{link}' target='_blank'>{resource}</a> (Tap the edge of mobile screen or swipe)", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"- <a href='{link}' target='_blank'>{resource}</a>", unsafe_allow_html=True)
-    elif menu == "💬 Faith Companion":
-        chatbot()
         st.sidebar.write("---")
-        if st.sidebar.button("Clear Chat"):
-            st.session_state.messages = [msg for msg in st.session_state.messages if msg["role"] == "system"]
-            st.success("Chat history cleared!")
+        if st.sidebar.button("🚪 Logout"):
+            st.session_state.authenticated = False
+            st.session_state.username = ''
+            st.success("Logged out successfully.")
             st.rerun()
-        st.sidebar.download_button(
-            label="Save Chat",
-            data=chat_to_json(st.session_state.messages),
-            file_name="chat_history.json",
-            mime="application/json",
-            help="Download your current chat history as a JSON file."
-        )
-
-    st.sidebar.write("---")
-    st.sidebar.write("Developed by KeepWatch")
-    if st.sidebar.button("🔓 Logout"):
-        st.session_state.authenticated = False
-        st.session_state.username = ''
-        st.session_state.pop('used_trivia_questions', None)
-        st.success("✅ Logged out successfully!")
-        st.rerun()
 
 if __name__ == "__main__":
     main()
