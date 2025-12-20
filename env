@@ -1,3 +1,4 @@
 GROQ_API_TOKEN = "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"
 pip install plyer
 pip install streamlit requests pyjwt
+pip install python-dotenv
