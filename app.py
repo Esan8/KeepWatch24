@@ -105,19 +105,9 @@ numbers_pool = [
 try:
     groq_token = st.secrets["api_keys"]["GROQ_API_TOKEN"]
 except KeyError:
-    try:
-        # Fallback to environment variable if secrets not available
-        groq_token = os.getenv("GROQ_API_TOKEN")
-        if not groq_token:
-            raise KeyError("GROQ_API_TOKEN not found in environment")
-    except:
-        st.warning("Groq API token not found. AI Chatbot feature will be disabled.")
-        groq_client = None
-        # Skip the rest of Groq setup
-    else:
-        groq_client = Groq(api_key=groq_token)
-else:
-    groq_client = Groq(api_key=groq_token)
+    st.error("Groq API token not found. Please set the GROQ_API_TOKEN in your Streamlit Secrets.")
+    st.stop()
+groq_client = Groq(api_key=groq_token)
 
 # ===========================
 # 5. AUTHENTICATION
