@@ -53,7 +53,7 @@ elif MANUAL_DAU_OVERRIDE is not None:
 else:
     # Priority 3: Default calculations
     AVG_STICKINESS_TARGET = 0.98  # Default stickiness
-    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)  # 9799 with defaults
+    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)
 
 DAILY_ENGAGEMENT_MULTIPLIER = 5.0
 
