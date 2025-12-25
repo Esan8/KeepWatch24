@@ -2378,60 +2378,49 @@ def generate_historical_dau_data(start_str, end_str, max_users):
     return df_dau
 
 def get_live_metrics():
-    """Calculates live metrics, centering the fluctuation around TODAY's historical DAU."""
+    """Calculates live metrics with a stable DER and fluctuating concurrency."""
     
-    # Initialize stable metrics in session state if not present
+    # 1. Initialize stable metrics
     if 'MAU_TARGET' not in st.session_state:
         st.session_state.MAU_TARGET = MAX_REGISTERED_USERS
         st.session_state.AVG_DAU_STABLE = AVG_DAU_CEILING
         st.session_state.DAILY_ENGAGEMENT_TARGET = int(AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
 
     MAU = st.session_state.MAU_TARGET
-    AVG_DAU = st.session_state.AVG_DAU_STABLE
-    TARGET_ENGAGEMENT = st.session_state.DAILY_ENGAGEMENT_TARGET
+    AVG_DAU = st.session_state.AVG_DAU_STABLE # This is your EDAC/Daily Capacity
 
-    # --- 1. Find the target DAU for today using the full historical trend ---
-    # NOW USES CURRENT MAX_REGISTERED_USERS (which may be manual override)
+    # 2. Get Today's "Unique" DAU (This stays stable for the DER)
     df_historical = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
-    
-    # Get today's date and normalize it to match the index (midnight)
     today = pd.to_datetime(datetime.now().date())
     
-    TODAY_DAU_TARGET = AVG_DAU # Safe default (high ceiling)
-    
+    # This represents the TOTAL unique people who visited today
     if today in df_historical.index:
-        # Case 1: Today is within the simulation period
-        TODAY_DAU_TARGET = df_historical.loc[today, 'DAU']
-    elif today > df_historical.index.max():
-        # Case 2: Today is AFTER the simulation period (stabilized at max)
-        TODAY_DAU_TARGET = df_historical.iloc[-1]['DAU'] 
-    elif today < df_historical.index.min():
-        # Case 3: Today is BEFORE the simulation period (use initial value)
-        TODAY_DAU_TARGET = df_historical.iloc[0]['DAU'] 
-    
-    # --- 2. Live fluctuating DAU (±5% around TODAY_DAU_TARGET) ---
-    if MANUAL_DAU_OVERRIDE is not None:
-        # Use the manually set value
-        current_dau = int(MANUAL_DAU_OVERRIDE)
+        TODAY_TOTAL_UNIQUE = df_historical.loc[today, 'DAU']
     else:
-        # Original calculation with random fluctuation
-        fluctuation = random.gauss(1.0, 0.05)
-        fluctuation = max(0.95, min(1.05, fluctuation))
-        current_dau = int(TODAY_DAU_TARGET * fluctuation)
+        TODAY_TOTAL_UNIQUE = AVG_DAU
+
+    # 3. Calculate Live Fluctuating Concurrency (Users active RIGHT NOW)
+    if MANUAL_DAU_OVERRIDE is not None:
+        live_users = int(MANUAL_DAU_OVERRIDE)
+    else:
+        # Live users should usually be a fraction of DAU, 
+        # but in your high-intensity model, we'll keep it near the target.
+        fluctuation = random.gauss(1.0, 0.02) # Tighter fluctuation for realism
+        live_users = int(TODAY_TOTAL_UNIQUE * fluctuation)
     
-    # Hard cap the fluctuating DAU at the overall AVG_DAU_CEILING (9498) 
-    current_dau = min(current_dau, AVG_DAU_CEILING)
-    
-    # Current stickiness calculation (now stable based on the DAU value)
-    current_stickiness_calc = round((current_dau / MAU) * 100, 1)
+    # Ensure Live count never exceeds the Total Registered
+    live_users = min(live_users, MAU)
+
+    # 4. RECTIFIED DER CALCULATION
+    # We use TODAY_TOTAL_UNIQUE (Stable) instead of live_users (Fluctuating)
+    stable_der = round((TODAY_TOTAL_UNIQUE / MAU) * 100, 1)
 
     return {
         "MAU_TARGET": MAU,
         "AVG_DAU_STABLE": AVG_DAU,
-        "CURRENT_DAU": current_dau,
-        "CURRENT_STICKINESS": current_stickiness_calc,
-        "DAILY_ENGAGEMENT_TARGET": TARGET_ENGAGEMENT,
-        "TODAY_DAU_TARGET": TODAY_DAU_TARGET 
+        "CURRENT_DAU": live_users,         # Renamed internally to reflect "Live"
+        "CURRENT_STICKINESS": stable_der,   # DER is now based on Daily Unique, not Live
+        "TODAY_DAU_TARGET": TODAY_TOTAL_UNIQUE 
     }
 
 def traction_analytics():
