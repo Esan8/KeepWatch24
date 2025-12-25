@@ -2472,9 +2472,6 @@ def traction_analytics():
     # We only select 'DAU' and the new 'Expected Capacity' column
     st.line_chart(df_dau[['DAU', 'Expected Capacity (EDAC)']])
     
-    # Create line chart with menu disabled
-    chart = st.line_chart(df_dau)
-    
     # --- Chart Customization (CSS) ---
     # Use CSS to hide the menu options on hover for a clean, professional "SaaS" look
     st.markdown("""
