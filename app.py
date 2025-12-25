@@ -39,7 +39,7 @@ MANUAL_AVG_DAU_CEILING = 10224                  # Change this to directly set AV
 if MANUAL_MAX_REGISTERED_USERS is not None:
     MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS
 else:
-    MAX_REGISTERED_USERS = 9898  # Default fallback
+    MAX_REGISTERED_USERS = 10551  # Default fallback
 
 # Calculate AVG_STICKINESS_TARGET based on the priority of manual overrides
 if MANUAL_AVG_DAU_CEILING is not None:
