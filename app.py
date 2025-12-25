@@ -2460,7 +2460,7 @@ def traction_analytics():
                      help="Total Unique Daily Users ÷ Total Registered Users. This metric is stable for the 24-hour period.")
     
         # --- DAU Trend (Historical) - NOW DYNAMIC ---
-    st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
+    st.subheader("Daily Active Users (24-Hour) — Historical Trend")
     # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
     df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
 
