@@ -2463,11 +2463,20 @@ def traction_analytics():
     st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
     # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
     df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+
+    # 2. Add the Horizontal Line Logic (The Benchmark)
+    # This creates a steady line at 10,224 (EDAC) to show your engagement ceiling
+    df_dau['Expected Capacity (EDAC)'] = metrics['AVG_DAU_STABLE']
+
+    # 3. Render the Multi-Line Chart
+    # We only select 'DAU' and the new 'Expected Capacity' column
+    st.line_chart(df_dau[['DAU', 'Expected Capacity (EDAC)']])
     
     # Create line chart with menu disabled
     chart = st.line_chart(df_dau)
     
-    # Use CSS to hide the menu options on hover
+    # --- Chart Customization (CSS) ---
+    # Use CSS to hide the menu options on hover for a clean, professional "SaaS" look
     st.markdown("""
     <style>
         [data-testid="stElementToolbar"] {
@@ -2482,19 +2491,19 @@ def traction_analytics():
     </style>
     """, unsafe_allow_html=True)
     
-    # Show manual override status
+    # 4. Status Footer & Manual Override Indicators
     manual_status = []
     if MANUAL_MAX_REGISTERED_USERS is not None:
-        manual_status.append(f"MAX_REGISTERED_USERS = {MANUAL_MAX_REGISTERED_USERS:,}")
+        manual_status.append(f"TRU: {MANUAL_MAX_REGISTERED_USERS:,}")
     if MANUAL_DAU_OVERRIDE is not None:
-        manual_status.append(f"DAU_OVERRIDE = {MANUAL_DAU_OVERRIDE:,}")
+        manual_status.append(f"Live Override: {MANUAL_DAU_OVERRIDE:,}")
     if MANUAL_AVG_DAU_CEILING is not None:
-        manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
+        manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"(Peak Daily) Historical growth curve last updated at 2:12 PM.")
+        st.caption(f"(Peak Daily) Historical growth curve last updated at 11:53 PM.")
     else:
-        st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
+        st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
     # --- Prayer Watch Engagement ---
     st.subheader("Prayer Watch Engagement — Core Feature Usage")
