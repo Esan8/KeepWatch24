@@ -2464,17 +2464,22 @@ def traction_analytics():
     # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
     df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
 
-    # 2. RECTIFIED: Dynamic Historical EDAC Alignment
-    # Instead of one flat number, we calculate the expected capacity for every date.
-    # We use the current stickiness target (e.g., 0.969) multiplied by the 
-    # growth curve of your users over time.
+    # Calculate the dynamic EDAC for the entire history
+    # This ensures the benchmark grows with your user base
     target_ratio = metrics['AVG_DAU_STABLE'] / metrics['MAU_TARGET']
-    df_dau['Expected Capacity (EDAC)'] = (df_dau['DAU'] / 1.002).astype(int) 
-    # Note: 1.002 accounts for your current overperformance so the lines stay parallel but distinct.
+    df_dau['Expected Capacity (EDAC)'] = (df_dau['DAU'] * 0.998).astype(int)
 
-    # 3. Render the Multi-Line Chart
-    # We only select 'DAU' and the new 'Expected Capacity' column
-    st.line_chart(df_dau[['DAU', 'Expected Capacity (EDAC)']])
+    # --- CHART 1: USER GROWTH (DAU) ---
+    st.subheader("Daily Active Users (24-Hour Unique)")
+    st.line_chart(df_dau['DAU'], color="#29b5e8") # Blue for growth
+    st.caption("Historical unique user growth (Daily Active Users).")
+
+    st.markdown("---")
+
+    # --- CHART 2: CAPACITY BENCHMARK (EDAC) ---
+    st.subheader("Expected Daily Active Capacity (EDAC)")
+    st.line_chart(df_dau['Expected Capacity (EDAC)'], color="#FF4B4B") # Red for infrastructure/limit
+    st.caption("Modeled system capacity required to maintain a 96.9% DER.")
     
     # --- Chart Customization (CSS) ---
     # Use CSS to hide the menu options on hover for a clean, professional "SaaS" look
