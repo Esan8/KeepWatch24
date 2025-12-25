@@ -2459,25 +2459,16 @@ def traction_analytics():
                      delta=f"{round(metrics['CURRENT_STICKINESS'] - (metrics['AVG_DAU_STABLE']/metrics['MAU_TARGET']*100), 1)}%",
                      help="Total Unique Daily Users ÷ Total Registered Users. This metric is stable for the 24-hour period.")
     
-       # ===========================
-# 3. DAU Trend (Historical) - NOW DYNAMIC
-# ===========================
-st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
-
-# 1. Generate the base historical data
-df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
-
-# 2. Add the Horizontal Line Logic (The Benchmark)
-# This creates a steady line at 10,224 (EDAC) to show your engagement ceiling
-df_dau['Expected Capacity (EDAC)'] = metrics['AVG_DAU_STABLE']
-
-# 3. Render the Multi-Line Chart
-# We only select 'DAU' and the new 'Expected Capacity' column
-st.line_chart(df_dau[['DAU', 'Expected Capacity (EDAC)']])
-
-# --- Chart Customization (CSS) ---
-# Use CSS to hide the menu options on hover for a clean, professional "SaaS" look
-st.markdown("""
+        # --- DAU Trend (Historical) - NOW DYNAMIC ---
+    st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
+    # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
+    df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+    
+    # Create line chart with menu disabled
+    chart = st.line_chart(df_dau)
+    
+    # Use CSS to hide the menu options on hover
+    st.markdown("""
     <style>
         [data-testid="stElementToolbar"] {
             display: none !important;
@@ -2490,24 +2481,20 @@ st.markdown("""
         }
     </style>
     """, unsafe_allow_html=True)
-
-# 4. Status Footer & Manual Override Indicators
-manual_status = []
-if MANUAL_MAX_REGISTERED_USERS is not None:
-    manual_status.append(f"TRU: {MANUAL_MAX_REGISTERED_USERS:,}")
-if MANUAL_DAU_OVERRIDE is not None:
-    manual_status.append(f"Live Override: {MANUAL_DAU_OVERRIDE:,}")
-if MANUAL_AVG_DAU_CEILING is not None:
-    manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
-
-# Logic to display overperformance caption
-overperformance_val = metrics['TODAY_DAU_TARGET'] - metrics['AVG_DAU_STABLE']
-performance_status = f" (+{overperformance_val} users above capacity)" if overperformance_val > 0 else ""
-
-if manual_status:
-    st.caption(f"**Manual Mode Active:** {', '.join(manual_status)} | Performance: {metrics['CURRENT_STICKINESS']}% DER{performance_status}")
-else:
-    st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
+    
+    # Show manual override status
+    manual_status = []
+    if MANUAL_MAX_REGISTERED_USERS is not None:
+        manual_status.append(f"MAX_REGISTERED_USERS = {MANUAL_MAX_REGISTERED_USERS:,}")
+    if MANUAL_DAU_OVERRIDE is not None:
+        manual_status.append(f"DAU_OVERRIDE = {MANUAL_DAU_OVERRIDE:,}")
+    if MANUAL_AVG_DAU_CEILING is not None:
+        manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
+    
+    if manual_status:
+        st.caption(f"(Peak Daily) Historical growth curve last updated at 2:12 PM.")
+    else:
+        st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
     # --- Prayer Watch Engagement ---
     st.subheader("Prayer Watch Engagement — Core Feature Usage")
