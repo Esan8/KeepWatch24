@@ -2426,31 +2426,48 @@ def get_live_metrics():
 def traction_analytics():
     st.title("📈 KeepWatch — Traction Analytics Dashboard")
     metrics = get_live_metrics()
-
-    # --- Primary Metrics ---
+    
+    # --- Top Level Static Metrics ---
     col1, col2 = st.columns(2)
     col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
-    col2.metric("Expected Daily Capacity (EDC)", 
-                f"{metrics['AVG_DAU_STABLE']:,}",
-                help="Modeled from current registered user base")
+    col2.metric("Expected Daily Capacity (EDC)", f"{metrics['AVG_DAU_STABLE']:,}")
 
+    st.markdown("---")
+
+    # --- Live Engagement Metrics ---
     col_live1, col_live2 = st.columns(2)
     
-    # Delta reflects the deviation from TODAY's historical trend point
-    live_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
+    # 24h Unique count (The 'Stable' number)
+    dau_total = metrics['TODAY_DAU_TARGET']
+    # Live count (The 'Fluctuating' number)
+    live_now = metrics['CURRENT_DAU']
     
+    # Delta shows the "Logged Off" or "Idle" users
+    exhaust_delta = live_now - dau_total 
+
     col_live1.metric("Active Users (Live)", 
-                     f"{metrics['CURRENT_DAU']:,}",
-                     delta=f"{live_delta:,}",
-                     help=f"Users currently active in the product")
+                     f"{live_now:,}",
+                     delta=f"{exhaust_delta:,}",
+                     help="Users currently connected. Negative delta represents users who were active earlier today but are currently offline.")
                      
     col_live2.metric("Daily Engagement Ratio (DER)", 
                      f"{metrics['CURRENT_STICKINESS']}%", 
-                     # Delta reflects deviation from the 98% ceiling
-                     delta=f"{metrics['CURRENT_STICKINESS'] - 98.0:.1f}%",
-                     help="DAU ÷ Total Registered Users.")
+                     help="Unique Daily Users / Total Registered. This stays stable regardless of live fluctuations.")
 
-    st.markdown("---")
+    # --- NEW: System Health & Capacity Utilization ---
+    st.subheader("System Health & Live Capacity Load")
+    
+    # Calculate utilization percentage
+    utilization = min(100, int((live_now / metrics['AVG_DAU_STABLE']) * 100))
+    
+    # Color coding the bar based on load intensity
+    bar_color = "green" if utilization < 90 else "orange" if utilization < 98 else "red"
+    
+    st.progress(utilization / 100)
+    st.write(f"**Current System Load:** {utilization}% of Expected Daily Capacity")
+    
+    if utilization > 95:
+        st.warning(f"⚠️ High Concurrency Alert: System operating at {utilization}% peak theoretical load.")
     
         # --- DAU Trend (Historical) - NOW DYNAMIC ---
     st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
