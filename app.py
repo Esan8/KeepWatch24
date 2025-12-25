@@ -2426,48 +2426,38 @@ def get_live_metrics():
 def traction_analytics():
     st.title("📈 KeepWatch — Traction Analytics Dashboard")
     metrics = get_live_metrics()
-    
-    # --- Top Level Static Metrics ---
+
+    # --- Primary Metrics ---
     col1, col2 = st.columns(2)
+    
+    # Total Registered remains the anchor
     col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
-    col2.metric("Expected Daily Capacity (EDC)", f"{metrics['AVG_DAU_STABLE']:,}")
+    
+    # Expected Capacity is your benchmark
+    col2.metric("Expected Daily Capacity (EDC)", 
+                f"{metrics['AVG_DAU_STABLE']:,}",
+                help="Modeled daily throughput based on user base.")
 
     st.markdown("---")
 
-    # --- Live Engagement Metrics ---
     col_live1, col_live2 = st.columns(2)
     
-    # 24h Unique count (The 'Stable' number)
-    dau_total = metrics['TODAY_DAU_TARGET']
-    # Live count (The 'Fluctuating' number)
-    live_now = metrics['CURRENT_DAU']
+    # ACTIVE USERS (LIVE): Now reflects real-time concurrency
+    # Delta shows how many users have 'exhausted' or logged off today
+    live_vs_daily_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
     
-    # Delta shows the "Logged Off" or "Idle" users
-    exhaust_delta = live_now - dau_total 
-
     col_live1.metric("Active Users (Live)", 
-                     f"{live_now:,}",
-                     delta=f"{exhaust_delta:,}",
-                     help="Users currently connected. Negative delta represents users who were active earlier today but are currently offline.")
+                     f"{metrics['CURRENT_DAU']:,}",
+                     delta=f"{live_vs_daily_delta:,}",
+                     delta_color="normal",
+                     help="Users currently connected to the heartbeat. Delta represents users who logged in today but are not currently live.")
                      
+    # DAILY ENGAGEMENT RATIO (DER): Now stable and based on 24h Unique DAU
+    # It will not jitter when people log off.
     col_live2.metric("Daily Engagement Ratio (DER)", 
                      f"{metrics['CURRENT_STICKINESS']}%", 
-                     help="Unique Daily Users / Total Registered. This stays stable regardless of live fluctuations.")
-
-    # --- NEW: System Health & Capacity Utilization ---
-    st.subheader("System Health & Live Capacity Load")
-    
-    # Calculate utilization percentage
-    utilization = min(100, int((live_now / metrics['AVG_DAU_STABLE']) * 100))
-    
-    # Color coding the bar based on load intensity
-    bar_color = "green" if utilization < 90 else "orange" if utilization < 98 else "red"
-    
-    st.progress(utilization / 100)
-    st.write(f"**Current System Load:** {utilization}% of Expected Daily Capacity")
-    
-    if utilization > 95:
-        st.warning(f"⚠️ High Concurrency Alert: System operating at {utilization}% peak theoretical load.")
+                     delta=f"{round(metrics['CURRENT_STICKINESS'] - (metrics['AVG_DAU_STABLE']/metrics['MAU_TARGET']*100), 1)}%",
+                     help="Total Unique Daily Users ÷ Total Registered Users. This metric is stable for the 24-hour period.")
     
         # --- DAU Trend (Historical) - NOW DYNAMIC ---
     st.subheader("Daily Active Users (24-Hour Unique) — Historical Trend")
