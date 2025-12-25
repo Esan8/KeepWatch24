@@ -31,9 +31,9 @@ groq_client = Groq(api_key=groq_token)
 # ===========================
 
 # MANUAL OVERRIDES - Set these values directly in the code
-MANUAL_MAX_REGISTERED_USERS = 10007              # Change this to override MAX_REGISTERED_USERS
-MANUAL_DAU_OVERRIDE = 9694                      # Change this to control "Active Users (Live)"
-MANUAL_AVG_DAU_CEILING = 9989                  # Change this to directly set AVG_DAU_CEILING (optional)
+MANUAL_MAX_REGISTERED_USERS = 10,551              # Change this to override MAX_REGISTERED_USERS
+MANUAL_DAU_OVERRIDE = 7,034                      # Change this to control "Active Users (Live)"
+MANUAL_AVG_DAU_CEILING = 10,224                  # Change this to directly set AVG_DAU_CEILING (optional)
 
 # Set the actual values to use based on manual overrides or calculations
 if MANUAL_MAX_REGISTERED_USERS is not None:
@@ -59,7 +59,7 @@ DAILY_ENGAGEMENT_MULTIPLIER = 5.0
 
 # Other constants remain the same
 DAU_START_DATE_STR = "2025-05-16"
-DAU_END_DATE_STR = "2025-12-22"
+DAU_END_DATE_STR = "2025-12-25"
 
 # ===========================
 # 3. App Constants & Patterns
