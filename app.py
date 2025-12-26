@@ -2450,7 +2450,7 @@ def traction_analytics():
                      f"{metrics['CURRENT_DAU']:,}",
                      delta=f"{live_vs_daily_delta:,}",
                      delta_color="normal",
-                     help="Users currently connected to the heartbeat. Delta represents users who logged in today but are not currently live.")
+                     help="Users currently connected.")
                      
     # DAILY ENGAGEMENT RATIO (DER): Now stable and based on 24h Unique DAU
     # It will not jitter when people log off.
