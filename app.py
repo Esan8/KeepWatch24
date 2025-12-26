@@ -2457,7 +2457,7 @@ def traction_analytics():
     col_live2.metric("Daily Engagement Ratio (DER)", 
                      f"{metrics['CURRENT_STICKINESS']}%", 
                      delta=f"{round(metrics['CURRENT_STICKINESS'] - (metrics['AVG_DAU_STABLE']/metrics['MAU_TARGET']*100), 1)}%",
-                     help="Total Unique Daily Users ÷ Total Registered Users. This metric is stable for the 24-hour period.")
+                     help="Total Unique Daily Users ÷ Total Registered Users.")
     
         # --- DAU Trend (Historical) - NOW DYNAMIC ---
     st.subheader("Daily Active Users (24-Hour) — Historical Trend")
