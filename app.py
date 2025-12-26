@@ -2436,7 +2436,7 @@ def traction_analytics():
     # Expected Capacity is your benchmark
     col2.metric("Expected Daily Capacity (EDC)", 
                 f"{metrics['AVG_DAU_STABLE']:,}",
-                help="Modeled daily throughput based on user base.")
+                help="Modeled assumption derived from the registered user base.")
 
     st.markdown("---")
 
