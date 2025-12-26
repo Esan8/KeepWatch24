@@ -2401,15 +2401,18 @@ def get_live_metrics():
 
     # 3. Calculate Live Fluctuating Concurrency (Users active RIGHT NOW)
     if MANUAL_DAU_OVERRIDE is not None:
-        live_users = int(MANUAL_DAU_OVERRIDE)
+        # Remove any floor logic here
+        current_dau = int(MANUAL_DAU_OVERRIDE)
     else:
-        # Live users should usually be a fraction of DAU, 
-        # but in your high-intensity model, we'll keep it near the target.
-        fluctuation = random.gauss(1.0, 0.02) # Tighter fluctuation for realism
-        live_users = int(TODAY_TOTAL_UNIQUE * fluctuation)
+        # Allow fluctuation to go lower if needed
+        fluctuation = random.uniform(0.90, 1.10) 
+        current_dau = int(TODAY_DAU_TARGET * fluctuation)
     
-    # Ensure Live count never exceeds the Total Registered
-    live_users = min(live_users, MAU)
+    # Ensure it doesn't exceed total registered, but allow it to be 0 or more
+    current_dau = max(0, min(current_dau, MAX_REGISTERED_USERS))
+
+    # DER should be based on the DAU TARGET (the stable bucket), not the live fluctuations
+    current_stickiness_calc = round((TODAY_DAU_TARGET / MAX_REGISTERED_USERS) * 100, 1)
 
     # 4. RECTIFIED DER CALCULATION
     # We use TODAY_TOTAL_UNIQUE (Stable) instead of live_users (Fluctuating)
