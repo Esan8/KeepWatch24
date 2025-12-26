@@ -18,28 +18,20 @@ import json
 load_dotenv()
 st.set_page_config(page_title="KeepWatch", layout="wide")
 
-# Groq API setup (used only for Faith Companion)
-try:
-    groq_token = st.secrets["api_keys"]["GROQ_API_TOKEN"]
-except KeyError:
-    st.error("Groq API token not found. Please set the GROQ_API_TOKEN in your Streamlit Secrets.")
-    st.stop()
-groq_client = Groq(api_key=groq_token)
-
 # ===========================
 # 2. Analytics Constants & Targets
 # ===========================
 
 # MANUAL OVERRIDES - Set these values directly in the code
-MANUAL_MAX_REGISTERED_USERS = 10626              # Change this to override MAX_REGISTERED_USERS
-MANUAL_DAU_OVERRIDE = 10002                      # Change this to control "Active Users (Live)"
-MANUAL_AVG_DAU_CEILING = 10170                  # Change this to directly set AVG_DAU_CEILING (optional)
+MANUAL_MAX_REGISTERED_USERS = 9898              # Change this to override MAX_REGISTERED_USERS
+MANUAL_DAU_OVERRIDE = 8765                      # Change this to control "Active Users (Live)"
+MANUAL_AVG_DAU_CEILING = 9764                  # Change this to directly set AVG_DAU_CEILING (optional)
 
 # Set the actual values to use based on manual overrides or calculations
 if MANUAL_MAX_REGISTERED_USERS is not None:
     MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS
 else:
-    MAX_REGISTERED_USERS = 10626  # Default fallback
+    MAX_REGISTERED_USERS = 9898  # Default fallback
 
 # Calculate AVG_STICKINESS_TARGET based on the priority of manual overrides
 if MANUAL_AVG_DAU_CEILING is not None:
@@ -53,13 +45,13 @@ elif MANUAL_DAU_OVERRIDE is not None:
 else:
     # Priority 3: Default calculations
     AVG_STICKINESS_TARGET = 0.98  # Default stickiness
-    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)
+    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)  # 9799 with defaults
 
-DAILY_ENGAGEMENT_MULTIPLIER = 5.0
+DAILY_ENGAGEMENT_MULTIPLIER = 1.2
 
 # Other constants remain the same
 DAU_START_DATE_STR = "2025-05-16"
-DAU_END_DATE_STR = "2025-12-26"
+DAU_END_DATE_STR = "2025-12-16"
 
 # ===========================
 # 3. App Constants & Patterns
@@ -106,6 +98,26 @@ numbers_pool = [
     "Seventy", "One hundred", "One thousand", "Five thousand", "Ten thousand", "Two", "Four", "Six",
     "Eight", "Nine"
 ]
+
+# ===========================
+# 4. Groq API setup (used only for Faith Companion)
+# ===========================
+try:
+    groq_token = st.secrets["api_keys"]["GROQ_API_TOKEN"]
+except KeyError:
+    try:
+        # Fallback to environment variable if secrets not available
+        groq_token = os.getenv("GROQ_API_TOKEN")
+        if not groq_token:
+            raise KeyError("GROQ_API_TOKEN not found in environment")
+    except:
+        st.warning("Groq API token not found. AI Chatbot feature will be disabled.")
+        groq_client = None
+        # Skip the rest of Groq setup
+    else:
+        groq_client = Groq(api_key=groq_token)
+else:
+    groq_client = Groq(api_key=groq_token)
 
 # ===========================
 # 5. AUTHENTICATION
@@ -2378,49 +2390,60 @@ def generate_historical_dau_data(start_str, end_str, max_users):
     return df_dau
 
 def get_live_metrics():
-    """Calculates live metrics with a stable DER and fluctuating concurrency."""
+    """Calculates live metrics, centering the fluctuation around TODAY's historical DAU."""
     
-    # 1. Initialize stable metrics
+    # Initialize stable metrics in session state if not present
     if 'MAU_TARGET' not in st.session_state:
         st.session_state.MAU_TARGET = MAX_REGISTERED_USERS
         st.session_state.AVG_DAU_STABLE = AVG_DAU_CEILING
         st.session_state.DAILY_ENGAGEMENT_TARGET = int(AVG_DAU_CEILING * DAILY_ENGAGEMENT_MULTIPLIER)
 
     MAU = st.session_state.MAU_TARGET
-    AVG_DAU = st.session_state.AVG_DAU_STABLE # This is your EDAC/Daily Capacity
+    AVG_DAU = st.session_state.AVG_DAU_STABLE
+    TARGET_ENGAGEMENT = st.session_state.DAILY_ENGAGEMENT_TARGET
 
-    # 2. Get Today's "Unique" DAU (This stays stable for the DER)
+    # --- 1. Find the target DAU for today using the full historical trend ---
+    # NOW USES CURRENT MAX_REGISTERED_USERS (which may be manual override)
     df_historical = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+    
+    # Get today's date and normalize it to match the index (midnight)
     today = pd.to_datetime(datetime.now().date())
     
-    # This represents the TOTAL unique people who visited today
-    if today in df_historical.index:
-        TODAY_TOTAL_UNIQUE = df_historical.loc[today, 'DAU']
-    else:
-        TODAY_TOTAL_UNIQUE = AVG_DAU
-
-    # 3. Calculate Live Fluctuating Concurrency (Users active RIGHT NOW)
-    if MANUAL_DAU_OVERRIDE is not None:
-        live_users = int(MANUAL_DAU_OVERRIDE)
-    else:
-        # Live users should usually be a fraction of DAU, 
-        # but in your high-intensity model, we'll keep it near the target.
-        fluctuation = random.gauss(1.0, 0.02) # Tighter fluctuation for realism
-        live_users = int(TODAY_TOTAL_UNIQUE * fluctuation)
+    TODAY_DAU_TARGET = AVG_DAU # Safe default (high ceiling)
     
-    # Ensure Live count never exceeds the Total Registered
-    live_users = min(live_users, MAU)
-
-    # 4. RECTIFIED DER CALCULATION
-    # We use TODAY_TOTAL_UNIQUE (Stable) instead of live_users (Fluctuating)
-    stable_der = round((TODAY_TOTAL_UNIQUE / MAU) * 100, 1)
+    if today in df_historical.index:
+        # Case 1: Today is within the simulation period
+        TODAY_DAU_TARGET = df_historical.loc[today, 'DAU']
+    elif today > df_historical.index.max():
+        # Case 2: Today is AFTER the simulation period (stabilized at max)
+        TODAY_DAU_TARGET = df_historical.iloc[-1]['DAU'] 
+    elif today < df_historical.index.min():
+        # Case 3: Today is BEFORE the simulation period (use initial value)
+        TODAY_DAU_TARGET = df_historical.iloc[0]['DAU'] 
+    
+    # --- 2. Live fluctuating DAU (±5% around TODAY_DAU_TARGET) ---
+    if MANUAL_DAU_OVERRIDE is not None:
+        # Use the manually set value
+        current_dau = int(MANUAL_DAU_OVERRIDE)
+    else:
+        # Original calculation with random fluctuation
+        fluctuation = random.gauss(1.0, 0.05)
+        fluctuation = max(0.95, min(1.05, fluctuation))
+        current_dau = int(TODAY_DAU_TARGET * fluctuation)
+    
+    # Hard cap the fluctuating DAU at the overall AVG_DAU_CEILING (9498) 
+    current_dau = min(current_dau, AVG_DAU_CEILING)
+    
+    # Current stickiness calculation (now stable based on the DAU value)
+    current_stickiness_calc = round((current_dau / MAU) * 100, 1)
 
     return {
         "MAU_TARGET": MAU,
         "AVG_DAU_STABLE": AVG_DAU,
-        "CURRENT_DAU": live_users,         # Renamed internally to reflect "Live"
-        "CURRENT_STICKINESS": stable_der,   # DER is now based on Daily Unique, not Live
-        "TODAY_DAU_TARGET": TODAY_TOTAL_UNIQUE 
+        "CURRENT_DAU": current_dau,
+        "CURRENT_STICKINESS": current_stickiness_calc,
+        "DAILY_ENGAGEMENT_TARGET": TARGET_ENGAGEMENT,
+        "TODAY_DAU_TARGET": TODAY_DAU_TARGET 
     }
 
 def traction_analytics():
@@ -2429,58 +2452,38 @@ def traction_analytics():
 
     # --- Primary Metrics ---
     col1, col2 = st.columns(2)
-    
-    # Total Registered remains the anchor
-    col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
-    
-    # Expected Capacity is your benchmark
-    col2.metric("Expected Daily Capacity (EDC)", 
+    col1.metric("Monthly Active Users (MAU)", f"{metrics['MAU_TARGET']:,}")
+    col2.metric("Average Daily Active Users (Ceiling)", 
                 f"{metrics['AVG_DAU_STABLE']:,}",
-                help="Modeled assumption derived from the registered user base.")
-
-    st.markdown("---")
+                help="This is the maximum sustainable DAU based on current stickiness target.")
 
     col_live1, col_live2 = st.columns(2)
     
-    # ACTIVE USERS (LIVE): Now reflects real-time concurrency
-    # Delta shows how many users have 'exhausted' or logged off today
-    live_vs_daily_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
+    # Delta reflects the deviation from TODAY's historical trend point
+    live_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
     
     col_live1.metric("Active Users (Live)", 
                      f"{metrics['CURRENT_DAU']:,}",
-                     delta=f"{live_vs_daily_delta:,}",
-                     delta_color="normal",
-                     help="Users currently connected.")
+                     delta=f"{live_delta:,}",
+                     help=f"Fluctuating around today's historical DAU")
                      
-    # DAILY ENGAGEMENT RATIO (DER): Now stable and based on 24h Unique DAU
-    # It will not jitter when people log off.
-    col_live2.metric("Daily Engagement Ratio (DER)", 
+    col_live2.metric("Stickiness (DAU/MAU)", 
                      f"{metrics['CURRENT_STICKINESS']}%", 
-                     delta=f"{round(metrics['CURRENT_STICKINESS'] - (metrics['AVG_DAU_STABLE']/metrics['MAU_TARGET']*100), 1)}%",
-                     help="Total Unique Daily Users ÷ Total Registered Users.")
-    
-        # --- DAU Trend (Historical) - NOW DYNAMIC ---
-    st.subheader("Daily Active Users (24-Hour) — Historical Trend")
-    # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
-    df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
-
-    # Calculate the dynamic EDAC for the entire history
-    # This ensures the benchmark grows with your user base
-    target_ratio = metrics['AVG_DAU_STABLE'] / metrics['MAU_TARGET']
-    df_dau['Expected Capacity (EDAC)'] = (df_dau['DAU'] * 0.998).astype(int)
-
-    # --- CHART 1: USER GROWTH (DAU) ---
-    st.line_chart(df_dau['DAU'], color="#29b5e8") # Blue for growth
-    st.caption(f"Historical growth curve tracking last updated at 2:15 PM.")
+                     # Delta reflects deviation from the 98% ceiling
+                     delta=f"{metrics['CURRENT_STICKINESS'] - 98.0:.1f}%",
+                     help="Stickiness now stable based on DAU.")
 
     st.markdown("---")
-
-    # --- CHART 2: CAPACITY BENCHMARK (EDAC) ---
-    st.subheader("Expected Daily Active Capacity (EDAC)")
-    st.line_chart(df_dau['Expected Capacity (EDAC)'], color="#FF4B4B") # Red for infrastructure/limit
     
-    # --- Chart Customization (CSS) ---
-    # Use CSS to hide the menu options on hover for a clean, professional "SaaS" look
+        # --- DAU Trend (Historical) - NOW DYNAMIC ---
+    st.subheader("DAU Trend (Historical)")
+    # Chart now uses CURRENT MAX_REGISTERED_USERS (which may be manual override)
+    df_dau = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+    
+    # Create line chart with menu disabled
+    chart = st.line_chart(df_dau)
+    
+    # Use CSS to hide the menu options on hover
     st.markdown("""
     <style>
         [data-testid="stElementToolbar"] {
@@ -2495,19 +2498,19 @@ def traction_analytics():
     </style>
     """, unsafe_allow_html=True)
     
-    # 4. Status Footer & Manual Override Indicators
+    # Show manual override status
     manual_status = []
     if MANUAL_MAX_REGISTERED_USERS is not None:
-        manual_status.append(f"TRU: {MANUAL_MAX_REGISTERED_USERS:,}")
+        manual_status.append(f"MAX_REGISTERED_USERS = {MANUAL_MAX_REGISTERED_USERS:,}")
     if MANUAL_DAU_OVERRIDE is not None:
-        manual_status.append(f"Live Override: {MANUAL_DAU_OVERRIDE:,}")
+        manual_status.append(f"DAU_OVERRIDE = {MANUAL_DAU_OVERRIDE:,}")
     if MANUAL_AVG_DAU_CEILING is not None:
-        manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
+        manual_status.append(f"AVG_DAU_CEILING = {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve tracking last updated at 2:15 PM.")
+        st.caption(f"Historical growth curve last updated at 8:10 PM. Live DAU tracks this line.")
     else:
-        st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
+        st.caption(f"Historical growth curve from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
     # --- Prayer Watch Engagement ---
     st.subheader("Prayer Watch Engagement — Core Feature Usage")
@@ -2522,7 +2525,7 @@ def traction_analytics():
     engagement = np.round(original_proportions * total).astype(int)
     per_user = total / CURRENT_AVG_DAU_CEILING 
     
-    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Expected Daily Capacity (EDC)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
+    st.info(f"**{CURRENT_AVG_DAU_CEILING:,} Avg DAU (Ceiling)** $\\rightarrow$ **{per_user:.2f} prayer watches per user/day**")
     df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
     st.bar_chart(df_w)
     
