@@ -2446,11 +2446,11 @@ def traction_analytics():
     # Delta shows how many users have 'exhausted' or logged off today
     live_vs_daily_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
     
-    col_live1.metric("Active Users (Live)", 
+    col_live1.metric("Daily Active Users", 
                      f"{metrics['CURRENT_DAU']:,}",
                      delta=f"{live_vs_daily_delta:,}",
                      delta_color="normal",
-                     help="Users currently connected.")
+                     help="Observed DAU.")
                      
     # DAILY ENGAGEMENT RATIO (DER): Now stable and based on 24h Unique DAU
     # It will not jitter when people log off.
