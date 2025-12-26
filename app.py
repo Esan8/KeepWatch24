@@ -2505,7 +2505,7 @@ def traction_analytics():
         manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve tracking last updated at 11:53 PM.")
+        st.caption(f"Historical growth curve tracking last updated at 2:15 PM.")
     else:
         st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
