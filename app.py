@@ -2475,9 +2475,9 @@ def traction_analytics():
 
     st.markdown("---")
 
-    # --- CHART 2: CAPACITY BENCHMARK (EDU) ---
+    # --- CHART 2: CAPACITY BENCHMARK (EDAC) ---
     st.subheader("Expected Daily Users (EDU)")
-    st.line_chart(df_dau['Expected Users (EDU)'], color="#FF4B4B") # Red for infrastructure/limit
+    st.line_chart(df_dau['Expected Capacity (EDAC)'], color="#FF4B4B") # Red for infrastructure/limit
     
     # --- Chart Customization (CSS) ---
     # Use CSS to hide the menu options on hover for a clean, professional "SaaS" look
