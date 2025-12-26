@@ -2471,7 +2471,7 @@ def traction_analytics():
 
     # --- CHART 1: USER GROWTH (DAU) ---
     st.line_chart(df_dau['DAU'], color="#29b5e8") # Blue for growth
-    st.caption(f"Historical growth curve tracking last updated at 11:53 PM.")
+    st.caption(f"Historical growth curve tracking last updated at 2:15 PM.")
 
     st.markdown("---")
 
