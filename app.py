@@ -32,7 +32,7 @@ groq_client = Groq(api_key=groq_token)
 
 # MANUAL OVERRIDES - Set these values directly in the code
 MANUAL_MAX_REGISTERED_USERS = 10656              # Change this to override MAX_REGISTERED_USERS
-MANUAL_DAU_OVERRIDE = 10200                      # Change this to control "Daily Active Users"
+MANUAL_DAU_OVERRIDE = 10223                      # Change this to control "Daily Active Users"
 MANUAL_AVG_DAU_CEILING = 10199                  # Change this to directly set AVG_DAU_CEILING (optional)
 
 # Set the actual values to use based on manual overrides or calculations
