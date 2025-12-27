@@ -2125,7 +2125,6 @@ def prayer_watch_reminders():
             else:
                 st.error("❌ Failed to fetch prayer times.")
               
-@st.cache_resource
 def get_books_and_versions():
     all_books = [
         "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
