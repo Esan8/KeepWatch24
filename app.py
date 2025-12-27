@@ -2434,7 +2434,7 @@ def traction_analytics():
     col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
     
     # Expected Capacity is your benchmark
-    col2.metric("Expected Daily Capacity (EDC)", 
+    col2.metric("Expected Daily Users (EDU)", 
                 f"{metrics['AVG_DAU_STABLE']:,}",
                 help="Modeled assumption derived from the registered user base.")
 
@@ -2471,12 +2471,12 @@ def traction_analytics():
 
     # --- CHART 1: USER GROWTH (DAU) ---
     st.line_chart(df_dau['DAU'], color="#29b5e8") # Blue for growth
-    st.caption(f"Historical growth curve tracking last updated at 2:15 PM.")
+    st.caption(f"Historical growth curve tracking last updated at 4:35 PM.")
 
     st.markdown("---")
 
     # --- CHART 2: CAPACITY BENCHMARK (EDAC) ---
-    st.subheader("Expected Daily Active Capacity (EDAC)")
+    st.subheader("Expected Daily Active Users (EDU)")
     st.line_chart(df_dau['Expected Capacity (EDAC)'], color="#FF4B4B") # Red for infrastructure/limit
     
     # --- Chart Customization (CSS) ---
@@ -2505,7 +2505,7 @@ def traction_analytics():
         manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve tracking last updated at 2:15 PM.")
+        st.caption(f"Historical growth curve tracking last updated at 4:35 PM.")
     else:
         st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
