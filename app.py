@@ -2434,7 +2434,7 @@ def traction_analytics():
     col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
     
     # Expected Capacity is your benchmark
-    col2.metric("Expected Daily Active Users (EDU)", 
+    col2.metric("Expected Daily Active Users (EDAU)", 
                 f"{metrics['AVG_DAU_STABLE']:,}",
                 help="Modeled assumption derived from the registered user base.")
 
@@ -2476,7 +2476,7 @@ def traction_analytics():
     st.markdown("---")
 
     # --- CHART 2: CAPACITY BENCHMARK (EDAC) ---
-    st.subheader("Expected Daily Active Users (EDU)")
+    st.subheader("Expected Daily Active Users (EDAU)")
     st.line_chart(df_dau['Expected Capacity (EDAC)'], color="#FF4B4B") # Red for infrastructure/limit
     
     # --- Chart Customization (CSS) ---
