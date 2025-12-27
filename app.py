@@ -2434,7 +2434,7 @@ def traction_analytics():
     col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
     
     # Expected Capacity is your benchmark
-    col2.metric("Expected Daily Users (EDU)", 
+    col2.metric("Expected Daily Active Users (EDU)", 
                 f"{metrics['AVG_DAU_STABLE']:,}",
                 help="Modeled assumption derived from the registered user base.")
 
