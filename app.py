@@ -9,21 +9,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import pytz
 from bs4 import BeautifulSoup
-import requests
-import json
-
-# ===========================
-# 1. Environment & Config
-# ===========================
-load_dotenv()
-st.set_page_config(page_title="KeepWatch", layout="wide")
-
-# Groq API setup (used only for Faith Companion)
-try:
-    groq_token = st.secrets["api_keys"]["GROQ_API_TOKEN"]
-except KeyError:
-    st.error("Groq API token not found. Please set the GROQ_API_TOKEN in your Streamlit Secrets.")
-    st.stop()
+import requ
 groq_client = Groq(api_key=groq_token)
 
 # ===========================
