@@ -31,7 +31,7 @@ groq_client = Groq(api_key=groq_token)
 # ===========================
 
 # MANUAL OVERRIDES - Set these values directly in the code
-MANUAL_MAX_REGISTERED_USERS = 10675              # Change this to override MAX_REGISTERED_USERS
+MANUAL_MAX_REGISTERED_USERS = 10698              # Change this to override MAX_REGISTERED_USERS
 MANUAL_DAU_OVERRIDE = 10309                      # Change this to control "Daily Active Users"
 MANUAL_AVG_DAU_CEILING = 10288                  # Change this to directly set AVG_DAU_CEILING (optional)
 
@@ -39,7 +39,7 @@ MANUAL_AVG_DAU_CEILING = 10288                  # Change this to directly set AV
 if MANUAL_MAX_REGISTERED_USERS is not None:
     MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS
 else:
-    MAX_REGISTERED_USERS = 10626  # Default fallback
+    MAX_REGISTERED_USERS = 10698  # Default fallback
 
 # Calculate AVG_STICKINESS_TARGET based on the priority of manual overrides
 if MANUAL_AVG_DAU_CEILING is not None:
