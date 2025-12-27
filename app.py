@@ -2476,7 +2476,7 @@ def traction_analytics():
     st.markdown("---")
 
     # --- CHART 2: CAPACITY BENCHMARK (EDAC) ---
-    st.subheader("Expected Daily Users (EDU)")
+    st.subheader("Expected Daily Active Capacity (EDAC)")
     st.line_chart(df_dau['Expected Capacity (EDAC)'], color="#FF4B4B") # Red for infrastructure/limit
     
     # --- Chart Customization (CSS) ---
