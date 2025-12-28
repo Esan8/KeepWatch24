@@ -2470,7 +2470,7 @@ def traction_analytics():
 
     # --- CHART 1: USER GROWTH (DAU) ---
     st.line_chart(df_dau['DAU'], color="#29b5e8") # Blue for growth
-    st.caption(f"Historical growth curve tracking last updated at 8:16 PM.")
+    st.caption(f"Historical growth curve tracking last updated at 9:38 AM.")
 
     st.markdown("---")
 
@@ -2504,7 +2504,7 @@ def traction_analytics():
         manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve tracking last updated at 8:16 PM.")
+        st.caption(f"Historical growth curve tracking last updated at 9:38 aM.")
     else:
         st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
