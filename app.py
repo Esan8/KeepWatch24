@@ -31,7 +31,7 @@ groq_client = Groq(api_key=groq_token)
 # ===========================
 
 # MANUAL OVERRIDES - Set these values directly in the code
-MANUAL_MAX_REGISTERED_USERS = 11078              # Change this to override MAX_REGISTERED_USERS
+MANUAL_MAX_REGISTERED_USERS = 11216              # Change this to override MAX_REGISTERED_USERS
 MANUAL_DAU_OVERRIDE = 10915                      # Change this to control "Daily Active Users"
 MANUAL_AVG_DAU_CEILING = 10893                  # Change this to directly set AVG_DAU_CEILING (optional)
 
@@ -2470,7 +2470,7 @@ def traction_analytics():
 
     # --- CHART 1: USER GROWTH (DAU) ---
     st.line_chart(df_dau['DAU'], color="#29b5e8") # Blue for growth
-    st.caption(f"Historical growth curve tracking last updated at 4:30 PM.")
+    st.caption(f"Historical growth curve tracking last updated at 8:30 PM.")
 
     st.markdown("---")
 
@@ -2504,7 +2504,7 @@ def traction_analytics():
         manual_status.append(f"Capacity Ceiling: {MANUAL_AVG_DAU_CEILING:,}")
     
     if manual_status:
-        st.caption(f"Historical growth curve tracking last updated at 4:30 PM.")
+        st.caption(f"Historical growth curve tracking last updated at 8:30 PM.")
     else:
         st.caption(f"Historical growth curve tracking from {DAU_START_DATE_STR} to {DAU_END_DATE_STR}.")
 
