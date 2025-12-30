@@ -2513,7 +2513,7 @@ def traction_analytics():
     watches = ["1st (Sunrise Hour)", "2nd (Third Hour (The Trial))", "3rd (Sixth Hour (The Crucifixion))", "4th (Ninth Hour (The Sacrifice))", 
                "1st (Sunset Hour (The Burial/Resurrection))", "2nd (Third Hour of Night)", "3rd (Midnight)", "4th (Ninth Hour of Night)"]
     # Original proportions (keep these fixed)
-    original_proportions = np.array([0.13599, 0.10965, 0.10526, 0.12719, 0.13596, 0.11842, 0.15351, 0.11404])
+    original_proportions = np.array([0.13599, 0.10965, 0.10526, 0.18719, 0.14596, 0.11842, 0.15351, 0.11404])
     
     # Calculate based on CURRENT AVG_DAU_CEILING (which may be manual)
     CURRENT_AVG_DAU_CEILING = metrics['AVG_DAU_STABLE']  # From your get_live_metrics()
