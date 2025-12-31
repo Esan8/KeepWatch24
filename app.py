@@ -1957,7 +1957,7 @@ def bible_word_search():
         """)
         
         # Display the grid
-        for row_idx, row in enumerate(grid):
+            for row_idx, row in enumerate(grid):
             cols = st.columns(len(row))
             for col_idx, letter in enumerate(row):
                 with cols[col_idx]:
