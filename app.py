@@ -2735,6 +2735,7 @@ def main():
                 bible_hangman()
             elif sub == "Word Search":
                 bible_word_search()
+                
         elif menu == "🏠 Home":
             st.markdown("# Welcome to KeepWatch! 🙏")
             st.markdown("""
