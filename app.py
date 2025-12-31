@@ -2218,7 +2218,6 @@ def link_bible_verses(text, version="BSB"):
 # ===========================
 # 9. PRAYER TIME CALCULATION FUNCTIONS
 # ===========================
-@st.cache_data(ttl=3600)
 def fetch_prayer_times_aladhan(city, country, method=2, date_obj=None):
     try:
         api_url = "https://api.aladhan.com/v1/timingsByCity"
@@ -2355,7 +2354,6 @@ def create_word_search(words, size=15):
 # 10. DYNAMIC METRICS & TRACTION ANALYTICS
 # ==============================================================================
 
-# REMOVE @st.cache_data decorator
 def generate_historical_dau_data(start_str, end_str, max_users):
     """Generates the historical DAU data for the chart, dynamically adjusting to max_users."""
     start = pd.to_datetime(start_str)
