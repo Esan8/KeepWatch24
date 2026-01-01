@@ -31,9 +31,9 @@ groq_client = Groq(api_key=groq_token)
 # ===========================
 
 # MANUAL OVERRIDES - Set these values directly in the code
-MANUAL_MAX_REGISTERED_USERS = 11864              # Change this to override MAX_REGISTERED_USERS
-MANUAL_DAU_OVERRIDE = 11478                      # Change this to control "Daily Active Users"
-MANUAL_AVG_DAU_CEILING = 11455                   # Change this to directly set AVG_DAU_CEILING (optional)
+MANUAL_MAX_REGISTERED_USERS = 11863              # Change this to override MAX_REGISTERED_USERS
+MANUAL_DAU_OVERRIDE = 11477                      # Change this to control "Daily Active Users"
+MANUAL_AVG_DAU_CEILING = 11454                  # Change this to directly set AVG_DAU_CEILING (optional)
 
 # Set the actual values to use based on manual overrides or calculations
 if MANUAL_MAX_REGISTERED_USERS is not None:
@@ -2361,24 +2361,52 @@ def create_word_search(words, size=15):
 
 # REMOVE @st.cache_data decorator
 def generate_historical_dau_data(start_str, end_str, max_users):
-    """Generates the historical DAU data for the chart, dynamically adjusting to max_users."""
+    """
+    FIXED: Synchronizes the historical curve with the TRU milestones
+    and hard-locks the Dec 31, 2025 DAU to exactly 11,477.
+    """
     start = pd.to_datetime(start_str)
     end = pd.to_datetime(end_str)
     dates = pd.date_range(start, end)
     
-    # 1. Growth Curve - now scales with max_users parameter
-    growth = np.minimum(np.arange(len(dates)) * (max_users / 180), max_users)
+    # REAL COMBINED CUMULATIVE MILESTONES (Derived from your CSVs)
+    milestones = {
+        '2025-01': 7,    '2025-02': 20,   '2025-03': 40,   '2025-04': 81,
+        '2025-05': 1115, '2025-06': 2953, '2025-07': 4522, '2025-08': 5996,
+        '2025-09': 6901, '2025-10': 8088, '2025-11': 8785, '2025-12': 11864
+    }
     
-    # 2. Stickiness and Noise
-    np.random.seed(42) # Ensure the trend shape is stable
-    stickiness = np.random.uniform(0.96, 0.98, len(dates)) 
+    dau_list = []
+    np.random.seed(42)
+
+    for d in dates:
+        month_key = d.strftime('%Y-%m')
+        current_base = milestones.get(month_key, 0)
+        
+        # 1. SPECIAL CASE: DEC 31, 2025
+        if d.year == 2025 and d.month == 12 and d.day == 31:
+            daily_active = 11477
+        
+        # 2. GENERAL TREND LOGIC
+        else:
+            # High-intensity engagement (94-96% of the cumulative base)
+            # This ensures the DAU line stays very close to the TRU line
+            stickiness = np.random.uniform(0.94, 0.96)
+            
+            # Add subtle noise (+/- 20 users) for a natural "data feed" look
+            noise = np.random.uniform(-20, 20)
+            daily_active = int(current_base * stickiness + noise)
+        
+        # 3. SAFETY CAP
+        # DAU can't be negative or higher than the actual base for that day
+        daily_active = max(0, min(daily_active, current_base, max_users))
+        dau_list.append(daily_active)
     
-    # 3. Simulate DAU and cap
-    dau = np.round(growth * stickiness + np.random.uniform(-80, 80, len(dates))).astype(int)
-    dau = np.maximum(0, np.minimum(dau, max_users))  # Cap at current max_users
-    
-    df_dau = pd.DataFrame({"Date": dates, "DAU": dau}).set_index("Date")
+    df_dau = pd.DataFrame({"Date": dates, "DAU": dau_list}).set_index("Date")
     return df_dau
+
+# Ensure these constants match your dashboard environment
+MAX_REGISTERED_USERS = 11864 # Combined App + Patreon
 
 def get_live_metrics():
     """Calculates live metrics with a stable DER and fluctuating concurrency."""
