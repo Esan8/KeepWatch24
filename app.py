@@ -2374,7 +2374,6 @@ def generate_historical_dau_data(start_str, end_str, max_users):
         '2025-01': 7,    '2025-02': 20,   '2025-03': 40,   '2025-04': 81,
         '2025-05': 1115, '2025-06': 2953, '2025-07': 4522, '2025-08': 5996,
         '2025-09': 6901, '2025-10': 8088, '2025-11': 8785, '2025-12': 11864
-        '2026-1': 11927
     }
     
     dau_list = []
@@ -2554,8 +2553,8 @@ def traction_analytics():
     
     # --- Retention & K-Factor (Simulated) ---
     st.subheader("Cohort Retention (First 7 Months)")
-    months = ["Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6", "Month 7", "Month 8"]
-    retention = [96, 96, 98, 98, 98, 98, 98, 98]
+    months = ["Month 1", "Month 2", "Month 3", "Month 4", "Month 5", "Month 6", "Month 7"]
+    retention = [96, 96, 98, 98, 98, 98, 98]
     df_r = pd.DataFrame({"Month": months, "Retention %": retention}).set_index("Month")
     st.line_chart(df_r)
 
