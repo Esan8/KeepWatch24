@@ -2374,6 +2374,7 @@ def generate_historical_dau_data(start_str, end_str, max_users):
         '2025-01': 7,    '2025-02': 20,   '2025-03': 40,   '2025-04': 81,
         '2025-05': 1115, '2025-06': 2953, '2025-07': 4522, '2025-08': 5996,
         '2025-09': 6901, '2025-10': 8088, '2025-11': 8785, '2025-12': 11864
+        '2026-1': 11927
     }
     
     dau_list = []
@@ -2406,7 +2407,7 @@ def generate_historical_dau_data(start_str, end_str, max_users):
     return df_dau
 
 # Ensure these constants match your dashboard environment
-MAX_REGISTERED_USERS = 11864 # Combined App + Patreon
+MAX_REGISTERED_USERS = 11927 # Combined App + Patreon
 
 def get_live_metrics():
     """Calculates live metrics with a stable DER and fluctuating concurrency."""
