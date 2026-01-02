@@ -33,7 +33,7 @@ groq_client = Groq(api_key=groq_token)
 # MANUAL OVERRIDES - Updated for Jan 1, 2026 Milestones
 MANUAL_MAX_REGISTERED_USERS = 11927              # Combined TRU (App + Patreon)
 MANUAL_DAU_OVERRIDE = 11520                      # New Year Day Target
-MANUAL_AVG_DAU_CEILING = 11449                   # EDC (96% of 11,927)
+MANUAL_AVG_DAU_CEILING = 11496                   # EDC (96% of 11,927)
 
 # Logic to set values based on overrides
 if MANUAL_MAX_REGISTERED_USERS is not None:
