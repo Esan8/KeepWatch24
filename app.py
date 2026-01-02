@@ -2445,7 +2445,6 @@ def traction_analytics():
     
     col_live1.metric("Daily Active Users", f"{metrics['CURRENT_DAU']:,}", 
                      delta=f"{live_vs_daily_delta:,}")
-                     help="Observed DAU.")
                      
     col_live2.metric("Daily Engagement Ratio (DER)", f"{metrics['CURRENT_STICKINESS']}%", 
                      delta=f"{round(metrics['CURRENT_STICKINESS'] - 96.0, 1)}%")
