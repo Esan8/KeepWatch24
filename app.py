@@ -2445,9 +2445,12 @@ def traction_analytics():
     
     col_live1.metric("Daily Active Users", f"{metrics['CURRENT_DAU']:,}", 
                      delta=f"{live_vs_daily_delta:,}")
+                     delta_color="normal",
+                     help="Observed DAU.")
                      
     col_live2.metric("Daily Engagement Ratio (DER)", f"{metrics['CURRENT_STICKINESS']}%", 
                      delta=f"{round(metrics['CURRENT_STICKINESS'] - 96.0, 1)}%")
+                     help="Total Unique Daily Users ÷ Total Registered Users.")
     
     # --- CHART 1: DAU GROWTH ---
     st.subheader("Daily Active Users (24-Hour) — Historical Trend")
@@ -2490,8 +2493,8 @@ def traction_analytics():
         st.line_chart(df_r, color="#00FF41")
 
     with col_r2:
-        st.metric("K-Factor", "0.98", delta="0.12")
-        st.write("Growth is compounding.")
+        st.metric("K-Factor", "0.98", delta="0.12", help="Viral threshold is 1.0")
+        st.write("Compounding Growth active.")
 
 
 # ==============================================================================
