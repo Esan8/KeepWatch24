@@ -2418,8 +2418,8 @@ def get_live_metrics():
     }
 
 def traction_analytics():
+    st.title("📈 KeepWatch — Traction Analytics Dashboard")
     metrics = get_live_metrics()
-    st.title(f"📈 KeepWatch Performance — {metrics['DATE']}")
 
     # --- TOP LINE METRICS ---
     col1, col2 = st.columns(2)
