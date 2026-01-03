@@ -2459,7 +2459,7 @@ def traction_analytics():
     total_events = int(metrics['OBSERVED_DAU'] * DAILY_ENGAGEMENT_MULTIPLIER)
     engagement = np.round(props * total_events).astype(int)
     
-    st.info(f"**{metrics['OBSERVED_DAU']:,} Active Users** $\\rightarrow$ **{DAILY_ENGAGEMENT_MULTIPLIER} prayer watches/user**")
+    st.info(f"**{metrics['OBSERVED_DAU']:,} Daily Active Users** $\\rightarrow$ **{DAILY_ENGAGEMENT_MULTIPLIER} prayer watches/user**")
     st.bar_chart(pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch"))
     
     # --- RETENTION ---
