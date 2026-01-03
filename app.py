@@ -2450,7 +2450,7 @@ def traction_analytics():
 
     # --- PRAYER WATCH ENGAGEMENT ---
     st.markdown("---")
-    st.subheader("Prayer Watch Engagement (5.0x Scaling)")
+    st.subheader("Prayer Watch Engagement")
     watches = ["1st (Sunrise)", "2nd (3rd Hour)", "3rd (6th Hour)", "4th (9th Hour)", 
                "1st (Sunset)", "2nd (3rd Night)", "3rd (Midnight)", "4th (9th Night)"]
     
