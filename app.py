@@ -30,30 +30,19 @@ groq_client = Groq(api_key=groq_token)
 # 2. Analytics Constants & Targets
 # ===========================
 
-# MANUAL OVERRIDES - Updated for Jan 1, 2026 Milestones
-MANUAL_MAX_REGISTERED_USERS = 11927              # Combined TRU (App + Patreon)
-MANUAL_DAU_OVERRIDE = 11520                      # New Year Day Target
-MANUAL_AVG_DAU_CEILING = 11496                   # EDC (96% of 11,927)
+# --- MANUAL OVERRIDES ---
+# These define the SCALE and DATE for the anchor
+MANUAL_MAX_REGISTERED_USERS = 12070  # Current Total Registered Users
+MANUAL_END_DATE_STR = "2026-01-02"   # Anchor point for the chart
+MANUAL_OBSERVED_DAU = 11708          # Enter your real number here to compare vs. Anchor
 
-# Logic to set values based on overrides
-if MANUAL_MAX_REGISTERED_USERS is not None:
-    MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS
-else:
-    MAX_REGISTERED_USERS = 11295
-
-if MANUAL_AVG_DAU_CEILING is not None:
-    AVG_DAU_CEILING = MANUAL_AVG_DAU_CEILING
-    AVG_STICKINESS_TARGET = AVG_DAU_CEILING / MAX_REGISTERED_USERS
-elif MANUAL_DAU_OVERRIDE is not None:
-    AVG_STICKINESS_TARGET = MANUAL_DAU_OVERRIDE / MAX_REGISTERED_USERS
-    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)
-else:
-    AVG_STICKINESS_TARGET = 0.96
-    AVG_DAU_CEILING = int(MAX_REGISTERED_USERS * AVG_STICKINESS_TARGET)
-
+# Global Parameters
 DAILY_ENGAGEMENT_MULTIPLIER = 5.0
 DAU_START_DATE_STR = "2025-05-16"
-DAU_END_DATE_STR = "2026-01-01"  # Extended into the new year
+
+# Configuration Logic
+MAX_REGISTERED_USERS = MANUAL_MAX_REGISTERED_USERS if MANUAL_MAX_REGISTERED_USERS else 11927
+DAU_END_DATE_STR = MANUAL_END_DATE_STR if MANUAL_END_DATE_STR else datetime.now().strftime('%Y-%m-%d')
 
 # ===========================
 # 3. App Constants & Patterns
@@ -2354,133 +2343,128 @@ def create_word_search(words, size=15):
 # ==============================================================================
 
 # REMOVE @st.cache_data decorator
-def generate_historical_dau_data(start_str, end_str, max_users):
+def generate_anchored_data(start_str, end_str, current_tru):
     """
-    Synchronizes growth curve with milestones and hard-locks the Jan 1, 2026 DAU.
+    Generates data where the CHART is the anchor.
+    DAU is automatically calculated within the 96%-98% corridor of TRU.
     """
     start = pd.to_datetime(start_str)
     end = pd.to_datetime(end_str)
     dates = pd.date_range(start, end)
     
-    # Updated Milestones including January 2026
+    # CSV-derived milestones
     milestones = {
         '2025-05': 1115, '2025-06': 2953, '2025-07': 4522, '2025-08': 5996,
         '2025-09': 6901, '2025-10': 8088, '2025-11': 8785, '2025-12': 11864,
-        '2026-01': 11927  # New Year Milestone
+        '2026-01': 11927
     }
+    dec_31_val = 11864
     
-    dau_list = []
-    np.random.seed(42)
+    dau_list, edau_list = [], []
+    np.random.seed(42) # Keeps fluctuations consistent on refresh
 
     for d in dates:
-        month_key = d.strftime('%Y-%m')
-        current_base = milestones.get(month_key, max_users)
-        
-        # 1. SPECIAL CASE: DEC 31, 2025 & JAN 1, 2026
-        if d.year == 2025 and d.month == 12 and d.day == 31:
-            daily_active = 11477
-        elif d.year == 2026 and d.month == 1 and d.day == 1:
-            daily_active = 11520
+        # 1. TRU GROWTH (The anchor base)
+        if d.year == 2025:
+            month_key = d.strftime('%Y-%m')
+            base_tru = milestones.get(month_key, dec_31_val)
         else:
-            # 94-96% Stickiness with natural jitter
-            stickiness = np.random.uniform(0.94, 0.96)
-            noise = np.random.uniform(-15, 15)
-            daily_active = int(current_base * stickiness + noise)
+            days_since_dec31 = (d - pd.to_datetime("2025-12-31")).days
+            total_days_in_gap = (end - pd.to_datetime("2025-12-31")).days
+            
+            if total_days_in_gap > 0:
+                growth_rate = (current_tru - dec_31_val) / total_days_in_gap
+                base_tru = dec_31_val + (growth_rate * days_since_dec31)
+            else:
+                base_tru = current_tru
+
+        # 2. ANCHORED DAU (Automatically scaling within 96-98%)
+        # This ignores manual DAU input to ensure the chart stays "in range"
+        stickiness = np.random.uniform(0.96, 0.98)
+        daily_active = int(base_tru * stickiness)
         
-        daily_active = max(0, min(daily_active, current_base, max_users))
+        # 3. ANCHORED EDAU (Target 98%)
+        edau_benchmark = int(base_tru * 0.98)
+        
         dau_list.append(daily_active)
+        edau_list.append(edau_benchmark)
     
-    df_dau = pd.DataFrame({"Date": dates, "DAU": dau_list}).set_index("Date")
-    return df_dau
+    return pd.DataFrame({
+        "Date": dates, 
+        "DAU": dau_list, 
+        "EDAU": edau_list
+    }).set_index("Date")
 
 def get_live_metrics():
-    """Calculates live metrics with a stable DER and fluctuating pulse."""
-    if 'MAU_TARGET' not in st.session_state:
-        st.session_state.MAU_TARGET = MAX_REGISTERED_USERS
-        st.session_state.AVG_DAU_STABLE = AVG_DAU_CEILING
-
-    MAU = st.session_state.MAU_TARGET
-    AVG_DAU = st.session_state.AVG_DAU_STABLE
-    df_historical = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAU)
+    """Calculates metrics based on chart anchors."""
+    MAU = MAX_REGISTERED_USERS
+    df_data = generate_anchored_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAU)
     
-    today = pd.to_datetime(datetime.now().date())
+    # The "Target" is what the chart says DAU should be today (Anchored)
+    ANCHORED_DAU_TARGET = df_data['DAU'].iloc[-1]
+    EDC_BENCHMARK = df_data['EDAU'].iloc[-1]
     
-    if today in df_historical.index:
-        TODAY_TOTAL_UNIQUE = df_historical.loc[today, 'DAU']
-    else:
-        # Fallback to the Jan 1st peak if current date is outside historical range
-        TODAY_TOTAL_UNIQUE = 11520 
-
-    # Live Fluctuating Concurrency
-    if MANUAL_DAU_OVERRIDE is not None:
-        live_users = int(MANUAL_DAU_OVERRIDE)
-    else:
-        fluctuation = random.gauss(1.0, 0.005)
-        live_users = int(TODAY_TOTAL_UNIQUE * fluctuation)
-    
-    live_users = min(live_users, MAU)
-    stable_der = round((TODAY_TOTAL_UNIQUE / MAU) * 100, 1)
+    # Compare your manual observed input to the chart anchor
+    observed = MANUAL_OBSERVED_DAU if MANUAL_OBSERVED_DAU else ANCHORED_DAU_TARGET
+    der = round((observed / MAU) * 100, 1)
 
     return {
-        "MAU_TARGET": MAU,
-        "AVG_DAU_STABLE": AVG_DAU,
-        "CURRENT_DAU": live_users,
-        "CURRENT_STICKINESS": stable_der,
-        "TODAY_DAU_TARGET": TODAY_TOTAL_UNIQUE 
+        "TRU": MAU,
+        "EDC": EDC_BENCHMARK,
+        "ANCHORED_DAU": ANCHORED_DAU_TARGET,
+        "OBSERVED_DAU": observed,
+        "DER": der,
+        "DATE": DAU_END_DATE_STR
     }
 
 def traction_analytics():
-    st.title("📈 KeepWatch — Traction Analytics Dashboard")
     metrics = get_live_metrics()
+    st.title(f"📈 KeepWatch Performance — {metrics['DATE']}")
 
-    # --- Primary Metrics ---
+    # --- TOP LINE METRICS ---
     col1, col2 = st.columns(2)
-    col1.metric("Total Registered Users (TRU)", f"{metrics['MAU_TARGET']:,}")
-    col2.metric("Expected Daily Active Users (EDAU)", f"{metrics['AVG_DAU_STABLE']:,}")
+    col1.metric("Total Registered Users (TRU)", f"{metrics['TRU']:,}")
+    col2.metric("Expected Daily Capacity (EDC)", f"{metrics['EDC']:,}")
 
     st.markdown("---")
 
     col_live1, col_live2 = st.columns(2)
-    live_vs_daily_delta = metrics['CURRENT_DAU'] - metrics['TODAY_DAU_TARGET']
+    # Delta shows how your manual input performs against the chart anchor
+    performance_delta = metrics['OBSERVED_DAU'] - metrics['ANCHORED_DAU']
     
-    col_live1.metric("Daily Active Users", f"{metrics['CURRENT_DAU']:,}", 
-                     delta=f"{live_vs_daily_delta:,}")
-                     
-    col_live2.metric("Daily Engagement Ratio (DER)", f"{metrics['CURRENT_STICKINESS']}%", 
-                     delta=f"{round(metrics['CURRENT_STICKINESS'] - 96.0, 1)}%")
+    col_live1.metric("Daily Active Users", f"{metrics['OBSERVED_DAU']:,}")
     
-    # --- CHART 1: DAU GROWTH ---
+    # DER delta against the 98% benchmark
+    der_delta = round(metrics['DER'] - 98.0, 1)
+    col_live2.metric("Daily Engagement Ratio (DER)", f"{metrics['DER']}%", 
+                     delta=f"{der_delta}%")
+
+    # --- SEPARATE CHARTS (THE ANCHORS) ---
+    df_data = generate_anchored_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
+    
     st.subheader("Daily Active Users (24-Hour) — Historical Trend")
-    df_chart = generate_historical_dau_data(DAU_START_DATE_STR, DAU_END_DATE_STR, MAX_REGISTERED_USERS)
-    st.line_chart(df_chart['DAU'], color="#29b5e8") 
+    st.line_chart(df_data['DAU'], color="#29b5e8") 
 
-    st.markdown("---")
-
-    # --- CHART 2: CAPACITY BENCHMARK ---
     st.subheader("Expected Daily Active Users (EDAU)")
-    # Using the EDAC logic from your Section 2
-    df_chart['Expected Capacity (EDAC)'] = (df_chart['DAU'] * 0.998).astype(int)
-    st.line_chart(df_chart['Expected Capacity (EDAC)'], color="#FF4B4B")
-    
-    # --- Prayer Watch Engagement (5.0x Multiplier) ---
+    st.line_chart(df_data['EDAU'], color="#FF4B4B")
+
+    # --- PRAYER WATCH ENGAGEMENT ---
     st.markdown("---")
-    st.subheader("Prayer Watch Engagement — Core Feature Usage")
-    watches = ["1st (Sunrise Hour)", "2nd (Third Hour (The Trial))", "3rd (Sixth Hour (The Crucifixion))", "4th (Ninth Hour (The Sacrifice))", 
-               "1st (Sunset Hour (The Burial/Resurrection))", "2nd (Third Hour of Night)", "3rd (Midnight)", "4th (Ninth Hour of Night)"]
+    st.subheader("Prayer Watch Engagement (5.0x Scaling)")
+    watches = ["1st (Sunrise)", "2nd (3rd Hour)", "3rd (6th Hour)", "4th (9th Hour)", 
+               "1st (Sunset)", "2nd (3rd Night)", "3rd (Midnight)", "4th (9th Night)"]
     
-    original_proportions = np.array([0.13599, 0.10965, 0.10526, 0.18719, 0.14596, 0.11842, 0.15351, 0.11404])
+    props = np.array([0.13599, 0.10965, 0.10526, 0.18719, 0.14596, 0.11842, 0.15351, 0.11404])
+    # Scaled to your Observed DAU
+    total_events = int(metrics['OBSERVED_DAU'] * DAILY_ENGAGEMENT_MULTIPLIER)
+    engagement = np.round(props * total_events).astype(int)
     
-    CURRENT_DAU_VAL = metrics['CURRENT_DAU']
-    total = int(CURRENT_DAU_VAL * DAILY_ENGAGEMENT_MULTIPLIER)
-    engagement = np.round(original_proportions * total).astype(int)
+    st.info(f"**{metrics['OBSERVED_DAU']:,} Active Users** $\\rightarrow$ **{DAILY_ENGAGEMENT_MULTIPLIER} prayer watches/user**")
+    st.bar_chart(pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch"))
     
-    st.info(f"**{CURRENT_DAU_VAL:,} Active Users** $\\rightarrow$ **{DAILY_ENGAGEMENT_MULTIPLIER:.1f} prayer watches per user/day**")
-    df_w = pd.DataFrame({"Watch": watches, "Events": engagement}).set_index("Watch")
-    st.bar_chart(df_w)
-    
-    # --- RETENTION METRICS (M1-M8) ---
+    # --- RETENTION ---
     st.markdown("---")
-    st.subheader("Cohort Retention (First 8 Months)")
+    st.subheader("Cohort Retention (Month 1 - Month 8)")
     col_r1, col_r2 = st.columns([2, 1])
 
     with col_r1:
@@ -2490,8 +2474,8 @@ def traction_analytics():
         st.line_chart(df_r, color="#00FF41")
 
     with col_r2:
-        st.metric("K-Factor", "0.98", delta="0.12", help="Viral threshold is 1.0")
-        st.write("Compounding Growth active.")
+        st.metric("K-Factor", "0.98", delta="0.12")
+        st.write("Growth is compounding.")
 
 
 # ==============================================================================
