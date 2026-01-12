@@ -2071,7 +2071,7 @@ def prayer_watch_reminders():
                     # Night Watches (Evening)
                     night_hour_details = [
                         {
-                            "name": "Sunset Hour (The Burial/Resurrection)",
+                            "name": "Sunset First Watch (The Burial/Resurrection)",
                             "time": f"{day_hours[11][0].strftime('%I:%M %p')} - {day_hours[11][1].strftime('%I:%M %p')}",
                             "significance": "A time of transition, symbolizing the Messiah's burial and resurrection (Mark 15:42-47).",
                             "reflection": "Trust in divine power to transform darkness into light and endings into new beginnings."
