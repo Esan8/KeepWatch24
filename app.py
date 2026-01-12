@@ -2188,7 +2188,7 @@ def link_bible_verses(text, version="BSB"):
             "2 Thessalonians": "2_thessalonians", "1 Timothy": "1_timothy", "1 Tim": "1_timothy", "2 Timothy": "2_timothy", "2 Tim": "2_timothy",
             "Titus": "titus", "Philemon": "philemon", "Phm": "philemon", "Hebrews": "hebrews", "James": "james",
             "1 Peter": "1_peter", "2 Peter": "2_peter", "1 John": "1_john", "2 John": "2_john",
-            "3 John": "3_john", "Jude": "jude", "Revelation": "revelation"
+            "3 John": "3_john", "Jude": "jude", "Revelation": "revelation", "Rev": "revelation"
         }
         normalized_book = book_mappings.get(book, book.lower().replace(" ", "_"))
         if normalized_book.startswith(("1_", "2_", "3_")):
