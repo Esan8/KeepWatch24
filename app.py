@@ -2174,7 +2174,7 @@ def link_bible_verses(text, version="BSB"):
             "Judg": "judges", "Jdg": "judges", "Judges": "judges", "Ruth": "ruth",
             "1 Samuel": "1_samuel", "1 Sam": "1_samuel", "2 Samuel": "2_samuel", "2 Sam": "2_samuel", "1 Kings": "1_kings", "1 Ki": "1_kings", "2 Kings": "2_kings", "2 Ki": "2_kings",
             "1 Chronicles": "1_chronicles", "2 Chronicles": "2_chronicles", "Ezra": "ezra",
-            "Nehemiah": "nehemiah", "Esther": "esther", "Job": "job", "Prov": "proverbs",
+            "Nehemiah": "nehemiah", "Esther": "esther", "Job": "job", "Prov": "proverbs", "Pro": "proverbs",
             "Proverbs": "proverbs", "Ecclesiastes": "ecclesiastes", "Isaiah": "isaiah",
             "Jeremiah": "jeremiah", "Lamentations": "lamentations", "Ezekiel": "ezekiel",
             "Daniel": "daniel", "Dan": "daniel", "Hosea": "hosea", "Hos": "hosea", "Joel": "joel", "Amos": "amos",
