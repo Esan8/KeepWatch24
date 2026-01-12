@@ -2077,19 +2077,19 @@ def prayer_watch_reminders():
                             "reflection": "Trust in divine power to transform darkness into light and endings into new beginnings."
                         },
                         {
-                            "name": "Third Hour of Night",
+                            "name": "Second Watch",
                             "time": f"{night_hours[2][0].strftime('%I:%M %p')} - {night_hours[2][1].strftime('%I:%M %p')}",
                             "significance": "A time of intercession and vigilance (Luke 12:38).",
                             "reflection": "Pray for divine intervention and protection."
                         },
                         {
-                            "name": "Midnight",
+                            "name": "Third Watch (Midnight)",
                             "time": f"{night_hours[5][0].strftime('%I:%M %p')} - {night_hours[5][1].strftime('%I:%M %p')}",
                             "significance": "Seek deliverance through prayer and praise (Matthew 25:1-13, Acts 16:25, Exodus 12:29-30).",
                             "reflection": "Rise to give thanks (Psalm 119:62) as divine power brings peace and clarity."
                         },
                         {
-                            "name": "Ninth Hour of Night",
+                            "name": "Fourth Watch",
                             "time": f"{night_hours[8][0].strftime('%I:%M %p')} - {night_hours[8][1].strftime('%I:%M %p')}",
                             "significance": "The hour of breakthrough when the Messiah walked on water (Mark 6:48).",
                             "reflection": "Pray for victory over challenges as night transitions to dawn."
