@@ -2451,8 +2451,8 @@ def traction_analytics():
     # --- PRAYER WATCH ENGAGEMENT ---
     st.markdown("---")
     st.subheader("Prayer Watch Engagement")
-    watches = ["1st (Sunrise)", "2nd (3rd Hour)", "3rd (6th Hour)", "4th (9th Hour)", 
-               "1st (Sunset)", "2nd (3rd Night)", "3rd (Midnight)", "4th (9th Night)"]
+    watches = ["1st (Sunrise)", "2nd (3rd Hour of Day)", "3rd (6th Hour of Mid-Day)", "4th (9th Hour of Day)", 
+               "1st (Sunset)", "2nd (3rd Hour of Night)", "3rd (6th Hour of Mid-Night)", "4th (9th Hour of Night)"]
     
     props = np.array([0.13599, 0.10965, 0.10526, 0.18719, 0.14596, 0.11842, 0.15351, 0.11404])
     # Scaled to your Observed DAU
