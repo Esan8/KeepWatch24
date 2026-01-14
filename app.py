@@ -2692,7 +2692,7 @@ def main():
             ### **Key Features**
             
             - 📈 **Traction Analytics**: Track engagement and growth metrics
-            - ⏰ **Prayer Watches**: Get reminders for the eight sacred prayer watches
+            - ⏰ **Prayer Watch Reminders**: Get reminders for the eight sacred prayer watches
             - 🤲 **Prayer Requests**: Submit and share prayer needs with the community
             - 📚 **Resources**: Explore curated spiritual resources
             - 💬 **Faith Companion**: Chat with our AI assistant for spiritual guidance
