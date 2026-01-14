@@ -2613,8 +2613,8 @@ def main():
 
         if menu == "📈 Analytics":
             traction_analytics()
-        elif menu == "⏰ Prayer Watches":
-            prayer_watches()  # Call the function
+        elif menu == "⏰ Prayer Watch Reminders":
+            prayer_watches_reminders()  # Call the function
         elif menu == "🤲 Prayer Request":
             st.title("🤲 Submit a Prayer Request")
             st.components.v1.html(f'<iframe src="{GOOGLE_FORM_EMBED_URL}" width="100%" height="800" frameborder="0"></iframe>', height=800)
