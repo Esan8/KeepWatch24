@@ -2071,25 +2071,25 @@ def prayer_watch_reminders():
                     # Night Watches (Evening)
                     night_hour_details = [
                         {
-                            "name": "Sunset First Watch (The Burial/Resurrection)",
+                            "name": "Sunset Hour (The Burial/Resurrection)",
                             "time": f"{day_hours[11][0].strftime('%I:%M %p')} - {day_hours[11][1].strftime('%I:%M %p')}",
                             "significance": "A time of transition, symbolizing the Messiah's burial and resurrection (Mark 15:42-47).",
                             "reflection": "Trust in divine power to transform darkness into light and endings into new beginnings."
                         },
                         {
-                            "name": "Second Watch",
+                            "name": "Third Hour of Night",
                             "time": f"{night_hours[2][0].strftime('%I:%M %p')} - {night_hours[2][1].strftime('%I:%M %p')}",
                             "significance": "A time of intercession and vigilance (Luke 12:38).",
                             "reflection": "Pray for divine intervention and protection."
                         },
                         {
-                            "name": "Third Watch (Midnight)",
+                            "name": "Midnight",
                             "time": f"{night_hours[5][0].strftime('%I:%M %p')} - {night_hours[5][1].strftime('%I:%M %p')}",
                             "significance": "Seek deliverance through prayer and praise (Matthew 25:1-13, Acts 16:25, Exodus 12:29-30).",
                             "reflection": "Rise to give thanks (Psalm 119:62) as divine power brings peace and clarity."
                         },
                         {
-                            "name": "Fourth Watch",
+                            "name": "Ninth Hour of Night",
                             "time": f"{night_hours[8][0].strftime('%I:%M %p')} - {night_hours[8][1].strftime('%I:%M %p')}",
                             "significance": "The hour of breakthrough when the Messiah walked on water (Mark 6:48).",
                             "reflection": "Pray for victory over challenges as night transitions to dawn."
@@ -2174,7 +2174,7 @@ def link_bible_verses(text, version="BSB"):
             "Judg": "judges", "Jdg": "judges", "Judges": "judges", "Ruth": "ruth",
             "1 Samuel": "1_samuel", "1 Sam": "1_samuel", "2 Samuel": "2_samuel", "2 Sam": "2_samuel", "1 Kings": "1_kings", "1 Ki": "1_kings", "2 Kings": "2_kings", "2 Ki": "2_kings",
             "1 Chronicles": "1_chronicles", "2 Chronicles": "2_chronicles", "Ezra": "ezra",
-            "Nehemiah": "nehemiah", "Esther": "esther", "Job": "job", "Prov": "proverbs", "Pro": "proverbs",
+            "Nehemiah": "nehemiah", "Esther": "esther", "Job": "job", "Prov": "proverbs",
             "Proverbs": "proverbs", "Ecclesiastes": "ecclesiastes", "Isaiah": "isaiah",
             "Jeremiah": "jeremiah", "Lamentations": "lamentations", "Ezekiel": "ezekiel",
             "Daniel": "daniel", "Dan": "daniel", "Hosea": "hosea", "Hos": "hosea", "Joel": "joel", "Amos": "amos",
@@ -2188,7 +2188,7 @@ def link_bible_verses(text, version="BSB"):
             "2 Thessalonians": "2_thessalonians", "1 Timothy": "1_timothy", "1 Tim": "1_timothy", "2 Timothy": "2_timothy", "2 Tim": "2_timothy",
             "Titus": "titus", "Philemon": "philemon", "Phm": "philemon", "Hebrews": "hebrews", "James": "james",
             "1 Peter": "1_peter", "2 Peter": "2_peter", "1 John": "1_john", "2 John": "2_john",
-            "3 John": "3_john", "Jude": "jude", "Revelation": "revelation", "Rev": "revelation"
+            "3 John": "3_john", "Jude": "jude", "Revelation": "revelation"
         }
         normalized_book = book_mappings.get(book, book.lower().replace(" ", "_"))
         if normalized_book.startswith(("1_", "2_", "3_")):
@@ -2451,8 +2451,8 @@ def traction_analytics():
     # --- PRAYER WATCH ENGAGEMENT ---
     st.markdown("---")
     st.subheader("Prayer Watch Engagement")
-    watches = ["1st (Sunrise)", "2nd (3rd Hour of Day)", "3rd (6th Hour of Mid-Day)", "4th (9th Hour of Day)", 
-               "1st (Sunset)", "2nd (3rd Hour of Night)", "3rd (6th Hour of Mid-Night)", "4th (9th Hour of Night)"]
+    watches = ["1st (Sunrise)", "2nd (3rd Hour)", "3rd (6th Hour)", "4th (9th Hour)", 
+               "1st (Sunset)", "2nd (3rd Night)", "3rd (Midnight)", "4th (9th Night)"]
     
     props = np.array([0.13599, 0.10965, 0.10526, 0.18719, 0.14596, 0.11842, 0.15351, 0.11404])
     # Scaled to your Observed DAU
@@ -2604,7 +2604,7 @@ def main():
         menu = st.sidebar.radio("Navigation", [
             "🏠 Home",
             "📈 Analytics",
-            "⏰ Prayer Watches",
+            "⏰ Prayer Watch Reminders",
             "🤲 Prayer Request",
             "📚 Resources",
             "💬 Faith Companion",
@@ -2613,8 +2613,8 @@ def main():
 
         if menu == "📈 Analytics":
             traction_analytics()
-        elif menu == "⏰ Prayer Watches":
-            prayer_watches()  # Call the function
+        elif menu == "⏰ Prayer Watch Reminders":
+            prayer_watch_reminders()  # Call the function
         elif menu == "🤲 Prayer Request":
             st.title("🤲 Submit a Prayer Request")
             st.components.v1.html(f'<iframe src="{GOOGLE_FORM_EMBED_URL}" width="100%" height="800" frameborder="0"></iframe>', height=800)
@@ -2692,7 +2692,7 @@ def main():
             ### **Key Features**
             
             - 📈 **Traction Analytics**: Track engagement and growth metrics
-            - ⏰ **Prayer Watches**: Get reminders for the eight sacred prayer watches
+            - ⏰ **Prayer Watch Reminders**: Get reminders for the eight sacred prayer watches
             - 🤲 **Prayer Requests**: Submit and share prayer needs with the community
             - 📚 **Resources**: Explore curated spiritual resources
             - 💬 **Faith Companion**: Chat with our AI assistant for spiritual guidance
