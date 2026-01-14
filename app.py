@@ -2604,7 +2604,7 @@ def main():
         menu = st.sidebar.radio("Navigation", [
             "🏠 Home",
             "📈 Analytics",
-            "⏰ Prayer Watches",
+            "⏰ Prayer Watch Reminders",
             "🤲 Prayer Request",
             "📚 Resources",
             "💬 Faith Companion",
