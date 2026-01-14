@@ -2604,7 +2604,7 @@ def main():
         menu = st.sidebar.radio("Navigation", [
             "🏠 Home",
             "📈 Analytics",
-            "⏰ Prayer Watch Reminders",
+            "⏰ Prayer Watches",
             "🤲 Prayer Request",
             "📚 Resources",
             "💬 Faith Companion",
@@ -2692,7 +2692,7 @@ def main():
             ### **Key Features**
             
             - 📈 **Traction Analytics**: Track engagement and growth metrics
-            - ⏰ **Prayer Watch Reminders**: Get reminders for the eight sacred prayer watches
+            - ⏰ **Prayer Watch**: Get reminders for the eight sacred prayer watches
             - 🤲 **Prayer Requests**: Submit and share prayer needs with the community
             - 📚 **Resources**: Explore curated spiritual resources
             - 💬 **Faith Companion**: Chat with our AI assistant for spiritual guidance
