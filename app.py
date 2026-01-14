@@ -2613,8 +2613,8 @@ def main():
 
         if menu == "📈 Analytics":
             traction_analytics()
-        elif menu == "⏰ Prayer Watch Reminders":
-            prayer_watch_reminders()  # Call the function
+        elif menu == "⏰ Prayer Watches":
+            prayer_watches()  # Call the function
         elif menu == "🤲 Prayer Request":
             st.title("🤲 Submit a Prayer Request")
             st.components.v1.html(f'<iframe src="{GOOGLE_FORM_EMBED_URL}" width="100%" height="800" frameborder="0"></iframe>', height=800)
@@ -2692,7 +2692,7 @@ def main():
             ### **Key Features**
             
             - 📈 **Traction Analytics**: Track engagement and growth metrics
-            - ⏰ **Prayer Watch**: Get reminders for the eight sacred prayer watches
+            - ⏰ **Prayer Watches**: Get reminders for the eight sacred prayer watches
             - 🤲 **Prayer Requests**: Submit and share prayer needs with the community
             - 📚 **Resources**: Explore curated spiritual resources
             - 💬 **Faith Companion**: Chat with our AI assistant for spiritual guidance
