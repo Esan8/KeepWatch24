@@ -33,7 +33,7 @@ groq_client = Groq(api_key=groq_token)
 # --- MANUAL OVERRIDES ---
 # These define the SCALE and DATE for the anchor
 MANUAL_MAX_REGISTERED_USERS = 13046  # Current Total Registered Users
-MANUAL_END_DATE_STR = "2026-01-16"   # Anchor point for the chart
+MANUAL_END_DATE_STR = "2026-01-17"   # Anchor point for the chart
 MANUAL_OBSERVED_DAU = 12766          # Enter your real number here to compare vs. Anchor
 
 # Global Parameters
