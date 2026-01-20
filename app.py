@@ -1,4 +1,4 @@
-import streamlit as st
+-import streamlit as st
 import numpy as np
 import pandas as pd
 import random
@@ -33,7 +33,7 @@ groq_client = Groq(api_key=groq_token)
 # --- MANUAL OVERRIDES ---
 # These define the SCALE and DATE for the anchor
 MANUAL_MAX_REGISTERED_USERS = 13049  # Current Total Registered Users
-MANUAL_END_DATE_STR = "2026-01-18"   # Anchor point for the chart
+MANUAL_END_DATE_STR = "2026-01-19"   # Anchor point for the chart
 MANUAL_OBSERVED_DAU = 12779          # Enter your real number here to compare vs. Anchor
 
 # Global Parameters
