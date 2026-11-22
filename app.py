@@ -187,7 +187,7 @@ def whatsapp_url(text):
 def telegram_url(text):
     return "https://t.me/share/url?text=" + urllib.parse.quote(text)
 
-def render_watch_card(watch_name, watch_start, watch_end, significance, reflection, timezone_name, card_key):
+def render_watch_card(watch_name, watch_start, watch_end, significance, reflection, timezone_name, card_key, location_label=""):
     active = is_watch_active(watch_start, watch_end, timezone_name)
     remaining = get_watch_remaining_seconds(watch_end, timezone_name)
     countdown = format_countdown(remaining)
@@ -237,18 +237,32 @@ def render_watch_card(watch_name, watch_start, watch_end, significance, reflecti
             )
 
         if st.button(f"✨ AI Reflection: {watch_name}", key=f"ai_ref_{card_key}"):
+            exact_window = f"{watch_start.strftime('%I:%M %p')} - {watch_end.strftime('%I:%M %p')} ({timezone_name})"
+            loc_text = f" in {location_label}" if location_label else ""
             with st.spinner("Generating..."):
                 try:
                     result = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
                         messages=[
                             {
+                                "role": "system",
+                                "content": (
+                                    "You are a spiritual reflection assistant. Always respond in English unless the user "
+                                    "explicitly writes in another language. Only reference the exact dynamic watch time "
+                                    "window provided for the user's location. Never render or invent fixed theological "
+                                    "clock hours."
+                                )
+                            },
+                            {
                                 "role": "user",
                                 "content": (
-                                    f"Prayer Watch:\n{watch_name}\n\n"
+                                    f"Prayer Watch: {watch_name}\n"
+                                    f"Location: {loc_text.strip() or timezone_name}\n"
+                                    f"Exact Dynamic Watch Window: {exact_window}\n\n"
                                     f"Significance:\n{significance}\n\n"
                                     f"Reflection:\n{reflection}\n\n"
-                                    "Create a deeper spiritual insight."
+                                    f"Write a concise spiritual insight grounded strictly in the exact dynamic time "
+                                    f"window ({exact_window}) for this location. Do not mention fixed theological hours."
                                 )
                             }
                         ]
@@ -2612,13 +2626,15 @@ def chatbot():
     st.markdown("<h1 style='text-align: center;'>KeepWatch</h1>", unsafe_allow_html=True)
     st.header("💬 Ask Me Anything")
     st.write("Any feedback errors? Refresh the page.")
+    system_prompt = (
+        "Hello, I am *Watcher*, your AI assistant. I specialize in providing comprehensive support across various aspects of your spiritual journey and Bible exploration. "
+        "I will include relevant Bible verses in my responses to enhance your understanding and provide deeper insights. "
+        "Always respond in English by default unless the user writes in another language, in which case respond in that language."
+    )
     if 'messages' not in st.session_state:
-        st.session_state.messages = [
-            {"role": "system", "content": (
-                "Hello, I am *Watcher*, your AI assistant. I specialize in providing comprehensive support across various aspects of your spiritual journey and Bible exploration. "
-                "I will include relevant Bible verses in my responses to enhance your understanding and provide deeper insights."
-            )}
-        ]
+        st.session_state.messages = [{"role": "system", "content": system_prompt}]
+    elif st.session_state.messages and st.session_state.messages[0].get("role") == "system":
+        st.session_state.messages[0]["content"] = system_prompt
     for idx, message in enumerate(st.session_state.messages):
         role = message["role"]
         content = message["content"]
