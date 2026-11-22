@@ -55,7 +55,6 @@ DAU_END_DATE_STR = MANUAL_END_DATE_STR if MANUAL_END_DATE_STR else datetime.now(
 # ===========================
 # 3. App Constants & Patterns
 # ===========================
-GOOGLE_FORM_EMBED_URL = "https://forms.gle/WNetJA3ZVoX1HeXB7"
 BIBLE_VERSE_PATTERN = re.compile(r'\b([1-3]?\s?[A-Za-z]+)\s(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?\b', re.IGNORECASE)
 
 # Category pools for distractors and Hangman words
@@ -240,7 +239,7 @@ def render_watch_card(watch_name, watch_start, watch_end, significance, reflecti
             with st.spinner("Generating..."):
                 try:
                     result = groq_client.chat.completions.create(
-                        model="llama-3.3-70b-versatile",
+                        model="openai/gpt-oss-120b",
                         messages=[
                             {
                                 "role": "user",
@@ -2661,7 +2660,7 @@ def chatbot():
             try:
                 chat_completion = groq_client.chat.completions.create(
                     messages=st.session_state.messages,
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-120b",
                 )
                 result = chat_completion.choices[0].message.content
             except Exception as e:
