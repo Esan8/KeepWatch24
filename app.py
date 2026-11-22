@@ -4,13 +4,13 @@ import pandas as pd
 import random
 import re
 import os
-from dataclasses import dataclass
-from datetime import datetime, date, time, timedelta
-import time as pytime
+import urllib.parse
+import base64
+import time
+from groq import Groq
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
 import pytz
-from bs4 import BeautifulSoup
-import requests
-import json
 from bs4 import BeautifulSoup
 import requests
 import json
@@ -187,7 +187,7 @@ def whatsapp_url(text):
 def telegram_url(text):
     return "https://t.me/share/url?text=" + urllib.parse.quote(text)
 
-def render_watch_card(watch_name, watch_start, watch_end, significance, reflection, timezone_name, card_key, location_label=""):
+def render_watch_card(watch_name, watch_start, watch_end, significance, reflection, timezone_name, card_key):
     active = is_watch_active(watch_start, watch_end, timezone_name)
     remaining = get_watch_remaining_seconds(watch_end, timezone_name)
     countdown = format_countdown(remaining)
@@ -237,32 +237,18 @@ def render_watch_card(watch_name, watch_start, watch_end, significance, reflecti
             )
 
         if st.button(f"✨ AI Reflection: {watch_name}", key=f"ai_ref_{card_key}"):
-            exact_window = f"{watch_start.strftime('%I:%M %p')} - {watch_end.strftime('%I:%M %p')} ({timezone_name})"
-            loc_text = f" in {location_label}" if location_label else ""
             with st.spinner("Generating..."):
                 try:
                     result = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
                         messages=[
                             {
-                                "role": "system",
-                                "content": (
-                                    "You are a spiritual reflection assistant. Always respond in English unless the user "
-                                    "explicitly writes in another language. Only reference the exact dynamic watch time "
-                                    "window provided for the user's location. Never render or invent fixed theological "
-                                    "clock hours."
-                                )
-                            },
-                            {
                                 "role": "user",
                                 "content": (
-                                    f"Prayer Watch: {watch_name}\n"
-                                    f"Location: {loc_text.strip() or timezone_name}\n"
-                                    f"Exact Dynamic Watch Window: {exact_window}\n\n"
+                                    f"Prayer Watch:\n{watch_name}\n\n"
                                     f"Significance:\n{significance}\n\n"
                                     f"Reflection:\n{reflection}\n\n"
-                                    f"Write a concise spiritual insight grounded strictly in the exact dynamic time "
-                                    f"window ({exact_window}) for this location. Do not mention fixed theological hours."
+                                    "Create a deeper spiritual insight."
                                 )
                             }
                         ]
@@ -2240,9 +2226,9 @@ def prayer_watch_reminders():
                 ]
 
                 st.subheader("🌞 Day Watches")
-                day_hour_indices = [0, 2, 5, 8]
                 for idx, hour in enumerate(day_hour_details):
-                    start_dt, end_dt = day_hours[day_hour_indices[idx]]
+                    start_dt = day_hours[[2, 5, 8, 11][idx]][0]
+                    end_dt = day_hours[[2, 5, 8, 11][idx]][1]
                     render_watch_card(
                         watch_name=hour["name"],
                         watch_start=start_dt,
@@ -2254,9 +2240,9 @@ def prayer_watch_reminders():
                     )
 
                 st.subheader("🌙 Night Watches")
-                night_hour_indices = [0, 3, 6, 9]
                 for idx, hour in enumerate(night_hour_details):
-                    start_dt, end_dt = night_hours[night_hour_indices[idx]]
+                    start_dt = night_hours[[11, 2, 5, 8][idx]][0]
+                    end_dt = night_hours[[11, 2, 5, 8][idx]][1]
                     render_watch_card(
                         watch_name=hour["name"],
                         watch_start=start_dt,
@@ -2365,52 +2351,20 @@ def link_bible_verses(text, version="BSB"):
 # 9. PRAYER TIME CALCULATION FUNCTIONS
 # ===========================
 @st.cache_data(ttl=3600)
-@st.cache_data(ttl=3600)
 def fetch_prayer_times_aladhan(city, country, method=2, date_obj=None):
-    date_str = date_obj.strftime('%d-%m-%Y') if date_obj else datetime.now().strftime('%d-%m-%Y')
-    headers = {"User-Agent": "KeepWatch/1.0"}
-    last_err = None
-
-    def _try_endpoint(url, params):
-        nonlocal last_err
-        for attempt in range(2):
-            try:
-                resp = requests.get(url, params=params, headers=headers, timeout=10)
-                if resp.status_code != 200:
-                    last_err = f"HTTP {resp.status_code}"
-                    time.sleep(0.5)
-                    continue
-                payload = resp.json()
-                if payload.get("code") == 200 and "data" in payload:
-                    return payload["data"]
-                status_val = payload.get("status") or "Unknown error"
-                detail_val = payload.get("data")
-                last_err = f"{status_val}: {detail_val}" if detail_val and detail_val != status_val else str(status_val)
-                if status_val != "SERVER_ERROR":
-                    return None
-            except requests.exceptions.RequestException as exc:
-                last_err = str(exc)
-            if attempt == 0:
-                time.sleep(0.5)
-        return None
-
-    # 1. Primary endpoint: timingsByCity
-    data = _try_endpoint(
-        f"https://api.aladhan.com/v1/timingsByCity/{date_str}",
-        {"city": city, "country": country, "method": method},
-    )
-    if data:
-        return data
-
-    # 2. Fallback endpoint: timingsByAddress
-    fallback_data = _try_endpoint(
-        f"https://api.aladhan.com/v1/timingsByAddress/{date_str}",
-        {"address": f"{city}, {country}", "method": method},
-    )
-    if fallback_data:
-        return fallback_data
-
-    st.error(f"Aladhan API error: {last_err or 'SERVER_ERROR'}")
+    try:
+        api_url = "https://api.aladhan.com/v1/timingsByCity"
+        params = {'city': city, 'country': country, 'method': method}
+        if date_obj:
+            params['date'] = date_obj.strftime('%d-%m-%Y')
+        response = requests.get(api_url, params=params, timeout=10)
+        data = response.json()
+        if response.status_code == 200 and data['code'] == 200:
+            return data['data']
+        else:
+            st.error("Aladhan API error: " + data.get('status', 'Unknown error'))
+    except requests.exceptions.RequestException as e:
+        st.error(f"Aladhan API request failed: {e}")
     return None
 
 def parse_time(time_str, date_obj, timezone_str):
@@ -2658,15 +2612,13 @@ def chatbot():
     st.markdown("<h1 style='text-align: center;'>KeepWatch</h1>", unsafe_allow_html=True)
     st.header("💬 Ask Me Anything")
     st.write("Any feedback errors? Refresh the page.")
-    system_prompt = (
-        "Hello, I am *Watcher*, your AI assistant. I specialize in providing comprehensive support across various aspects of your spiritual journey and Bible exploration. "
-        "I will include relevant Bible verses in my responses to enhance your understanding and provide deeper insights. "
-        "Always respond in English by default unless the user writes in another language, in which case respond in that language."
-    )
     if 'messages' not in st.session_state:
-        st.session_state.messages = [{"role": "system", "content": system_prompt}]
-    elif st.session_state.messages and st.session_state.messages[0].get("role") == "system":
-        st.session_state.messages[0]["content"] = system_prompt
+        st.session_state.messages = [
+            {"role": "system", "content": (
+                "Hello, I am *Watcher*, your AI assistant. I specialize in providing comprehensive support across various aspects of your spiritual journey and Bible exploration. "
+                "I will include relevant Bible verses in my responses to enhance your understanding and provide deeper insights."
+            )}
+        ]
     for idx, message in enumerate(st.session_state.messages):
         role = message["role"]
         content = message["content"]
