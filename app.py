@@ -2254,9 +2254,9 @@ def prayer_watch_reminders():
                     )
 
                 st.subheader("🌙 Night Watches")
+                night_hour_indices = [0, 2, 5, 8]
                 for idx, hour in enumerate(night_hour_details):
-                    start_dt = night_hours[[11, 2, 5, 8][idx]][0]
-                    end_dt = night_hours[[11, 2, 5, 8][idx]][1]
+                    start_dt, end_dt = night_hours[night_hour_indices[idx]]
                     render_watch_card(
                         watch_name=hour["name"],
                         watch_start=start_dt,
