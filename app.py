@@ -716,8 +716,14 @@ def prayer_watch_reminders():
     st.title("⏰ Prayer Watch Reminders")
     st.write("Enter any city and country to receive the Sacred Prayer Watches based on the current date.")
 
-    city_input = st.text_input("📍 City Name (e.g., 'Brooklyn' or 'Brooklyn, NY' or 'Paris, France')", key="watch_city_input")
-    country_input = st.text_input("🌍 Country Name (e.g., 'USA' or 'France')", key="watch_country_input")
+    city_input = st.text_input(
+        "📍 City Name (e.g., 'Brooklyn' or 'Brooklyn, NY' or 'Paris, France')",
+        key="watch_city_input",
+    )
+    country_input = st.text_input(
+        "🌍 Country Name (e.g., 'USA' or 'France')",
+        key="watch_country_input",
+    )
 
     if st.button("⏰ Calculate the Prayer Watches", key="calc_watches_btn"):
         if not city_input.strip():
@@ -731,94 +737,102 @@ def prayer_watch_reminders():
 
     if "active_watch_location" in st.session_state:
         active_city, active_country = st.session_state.active_watch_location
-        today = datetime.now().date()
-        prayer_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=today)
+        target_date = datetime.now().date()
+        prayer_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=target_date)
 
         if prayer_data:
             timings = prayer_data["timings"]
             timezone_name = prayer_data["meta"]["timezone"]
-            sunrise = parse_time(timings["Sunrise"], today, timezone_name)
-            sunset = parse_time(timings["Sunset"], today, timezone_name)
+            sunrise = parse_time(timings["Sunrise"], target_date, timezone_name)
+            sunset = parse_time(timings["Sunset"], target_date, timezone_name)
 
             if sunrise and sunset:
-                next_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=today + timedelta(days=1))
-                next_sunrise = (
-                    parse_time(next_data["timings"]["Sunrise"], today + timedelta(days=1), timezone_name)
-                    if next_data
-                    else None
-                )
-                day_hours, night_hours = calculate_hours(sunrise, sunset, next_sunrise)
-
-                day_hour_details = [
-                    {
-                        "name": "Sunrise Hour",
-                        "significance": "Rejoice in the new day and commit plans to the LORD (Psalm 5:3).",
-                        "reflection": "Celebrate the dawning of faith and His mercies.",
-                    },
-                    {
-                        "name": "Third Hour (The Trial)",
-                        "significance": "The Holy Presence descended at Pentecost, empowering believers to fulfill their purpose (Acts 2:1-15).",
-                        "reflection": "Align your life with divine purpose and pursue meaningful work, avoiding idleness (Matthew 20:1-5).",
-                    },
-                    {
-                        "name": "Sixth Hour (The Crucifixion)",
-                        "significance": "The Sixth Hour marks the height of the day, a time of divine clarity (John 4:6; Acts 10:9-13).",
-                        "reflection": "Reflect on the Messiah's trial before Pilate (John 19:14-16) and His crucifixion.",
-                    },
-                    {
-                        "name": "Ninth Hour (The Sacrifice)",
-                        "significance": "The Messiah's death on the cross tore the temple veil, symbolizing direct access to God (Matthew 27:45-51).",
-                        "reflection": "Consider Cornelius's prayers (Acts 10:30-33) and Peter and John's devotion (Acts 3:1).",
-                    },
-                ]
-
-                night_hour_details = [
-                    {
-                        "name": "Sunset Hour (The Burial/Resurrection)",
-                        "significance": "A time of transition, symbolizing the Messiah's burial and resurrection (Mark 15:42-47).",
-                        "reflection": "Trust in divine power to transform darkness into light and endings into new beginnings.",
-                    },
-                    {
-                        "name": "Second Watch of Night",
-                        "significance": "A time of intercession and vigilance (Luke 12:38).",
-                        "reflection": "Pray for divine intervention and protection.",
-                    },
-                    {
-                        "name": "Third Watch of Midnight",
-                        "significance": "Seek deliverance through prayer and praise (Matthew 25:1-13; Acts 16:25; Exodus 12:29-30).",
-                        "reflection": "Rise to give thanks (Psalm 119:62) as divine power brings peace and clarity.",
-                    },
-                    {
-                        "name": "Fourth Watch of Night",
-                        "significance": "The hour of breakthrough when the Messiah walked on water (Mark 6:48).",
-                        "reflection": "Pray for victory over challenges as night transitions to dawn.",
-                    },
-                ]
-
+                day_hours, night_hours = calculate_hours(sunrise, sunset)
                 location_label = f"{active_city}, {active_country}"
+
+                day_watch_slots = [
+                    (
+                        night_hours[11][0],
+                        night_hours[11][1],
+                        "Sunrise Hour",
+                        "Rejoice in the new day and commit plans to the LORD (Psalm 5:3).",
+                        "Celebrate the dawning of faith and His mercies.",
+                    ),
+                    (
+                        day_hours[2][0],
+                        day_hours[2][1],
+                        "Third Hour (The Trial)",
+                        "The Holy Presence descended at Pentecost, empowering believers to fulfill their purpose (Acts 2:1-15). This is a time of purpose and power—a sacred hour to reflect on the LORD's plans, crucify the flesh (Galatians 2:20), and appropriate the benefits of the Messiah's suffering.",
+                        "Align your life with divine purpose and pursue meaningful work, avoiding idleness (Matthew 20:1-5). Let the third hour, when they brought the Messiah to face trial (Mark 15:25), remind you of His ultimate suffering—a call to dedicate your actions to endurance.",
+                    ),
+                    (
+                        day_hours[5][0],
+                        day_hours[5][1],
+                        "Sixth Hour (The Crucifixion)",
+                        "The Sixth Hour marks the height of the day, a time of divine clarity. The Messiah encountered the Samaritan woman at Jacob's well (John 4:6), and Peter received a vision (Acts 10:9-13).",
+                        "Reflect on the Messiah's trial before Pilate (John 19:14-16) and His crucifixion, which opened the path for forgiveness and reconciliation with God.",
+                    ),
+                    (
+                        day_hours[8][0],
+                        day_hours[8][1],
+                        "Ninth Hour (The Sacrifice)",
+                        "The Messiah's death on the cross tore the temple veil, symbolizing direct access to God (Matthew 27:45-51).",
+                        "Consider Cornelius's prayers (Acts 10:30-33) and Peter and John's devotion (Acts 3:1), reflecting God's grace and triumph.",
+                    ),
+                ]
+
+                night_watch_slots = [
+                    (
+                        day_hours[11][0],
+                        day_hours[11][1],
+                        "Sunset Hour (The Burial/Resurrection)",
+                        "A time of transition, symbolizing the Messiah's burial and resurrection (Mark 15:42-47).",
+                        "Trust in divine power to transform darkness into light and endings into new beginnings.",
+                    ),
+                    (
+                        night_hours[2][0],
+                        night_hours[2][1],
+                        "Second Watch of Night",
+                        "A time of intercession and vigilance (Luke 12:38).",
+                        "Pray for divine intervention and protection.",
+                    ),
+                    (
+                        night_hours[5][0],
+                        night_hours[5][1],
+                        "Third Watch of Midnight",
+                        "Seek deliverance through prayer and praise (Matthew 25:1-13, Acts 16:25, Exodus 12:29-30).",
+                        "Rise to give thanks (Psalm 119:62) as divine power brings peace and clarity.",
+                    ),
+                    (
+                        night_hours[8][0],
+                        night_hours[8][1],
+                        "Fourth Watch of Night",
+                        "The hour of breakthrough when the Messiah walked on water (Mark 6:48).",
+                        "Pray for victory over challenges as night transitions to dawn.",
+                    ),
+                ]
+
                 st.subheader("🌞 Day Watches")
-                for idx, hour in enumerate(day_hour_details):
-                    start_dt, end_dt = day_hours[[0, 2, 5, 8][idx]]
+                for idx, (start_dt, end_dt, name, sig, ref) in enumerate(day_watch_slots):
                     render_watch_card(
-                        watch_name=hour["name"],
+                        watch_name=name,
                         watch_start=start_dt,
                         watch_end=end_dt,
-                        significance=hour["significance"],
-                        reflection=hour["reflection"],
+                        significance=sig,
+                        reflection=ref,
                         timezone_name=timezone_name,
                         card_key=f"day_{idx}",
                         location_label=location_label,
                     )
 
-                st.subheader("🌙 Night Watches")
-                for idx, hour in enumerate(night_hour_details):
-                    start_dt, end_dt = night_hours[[0, 2, 5, 8][idx]]
+                st.subheader("🌜 Night Watches")
+                for idx, (start_dt, end_dt, name, sig, ref) in enumerate(night_watch_slots):
                     render_watch_card(
-                        watch_name=hour["name"],
+                        watch_name=name,
                         watch_start=start_dt,
                         watch_end=end_dt,
-                        significance=hour["significance"],
-                        reflection=hour["reflection"],
+                        significance=sig,
+                        reflection=ref,
                         timezone_name=timezone_name,
                         card_key=f"night_{idx}",
                         location_label=location_label,
