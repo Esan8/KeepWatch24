@@ -2365,20 +2365,52 @@ def link_bible_verses(text, version="BSB"):
 # 9. PRAYER TIME CALCULATION FUNCTIONS
 # ===========================
 @st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def fetch_prayer_times_aladhan(city, country, method=2, date_obj=None):
-    try:
-        api_url = "https://api.aladhan.com/v1/timingsByCity"
-        params = {'city': city, 'country': country, 'method': method}
-        if date_obj:
-            params['date'] = date_obj.strftime('%d-%m-%Y')
-        response = requests.get(api_url, params=params, timeout=10)
-        data = response.json()
-        if response.status_code == 200 and data['code'] == 200:
-            return data['data']
-        else:
-            st.error("Aladhan API error: " + data.get('status', 'Unknown error'))
-    except requests.exceptions.RequestException as e:
-        st.error(f"Aladhan API request failed: {e}")
+    date_str = date_obj.strftime('%d-%m-%Y') if date_obj else datetime.now().strftime('%d-%m-%Y')
+    headers = {"User-Agent": "KeepWatch/1.0"}
+    last_err = None
+
+    def _try_endpoint(url, params):
+        nonlocal last_err
+        for attempt in range(2):
+            try:
+                resp = requests.get(url, params=params, headers=headers, timeout=10)
+                if resp.status_code != 200:
+                    last_err = f"HTTP {resp.status_code}"
+                    time.sleep(0.5)
+                    continue
+                payload = resp.json()
+                if payload.get("code") == 200 and "data" in payload:
+                    return payload["data"]
+                status_val = payload.get("status") or "Unknown error"
+                detail_val = payload.get("data")
+                last_err = f"{status_val}: {detail_val}" if detail_val and detail_val != status_val else str(status_val)
+                if status_val != "SERVER_ERROR":
+                    return None
+            except requests.exceptions.RequestException as exc:
+                last_err = str(exc)
+            if attempt == 0:
+                time.sleep(0.5)
+        return None
+
+    # 1. Primary endpoint: timingsByCity
+    data = _try_endpoint(
+        f"https://api.aladhan.com/v1/timingsByCity/{date_str}",
+        {"city": city, "country": country, "method": method},
+    )
+    if data:
+        return data
+
+    # 2. Fallback endpoint: timingsByAddress
+    fallback_data = _try_endpoint(
+        f"https://api.aladhan.com/v1/timingsByAddress/{date_str}",
+        {"address": f"{city}, {country}", "method": method},
+    )
+    if fallback_data:
+        return fallback_data
+
+    st.error(f"Aladhan API error: {last_err or 'SERVER_ERROR'}")
     return None
 
 def parse_time(time_str, date_obj, timezone_str):
