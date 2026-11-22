@@ -2254,18 +2254,18 @@ def prayer_watch_reminders():
                     )
 
                 st.subheader("🌙 Night Watches")
-night_hour_indices = [0, 3, 6, 9]
-for idx, hour in enumerate(night_hour_details):
-    start_dt, end_dt = night_hours[night_hour_indices[idx]]
-    render_watch_card(
-        watch_name=hour["name"],
-        watch_start=start_dt,
-        watch_end=end_dt,
-        significance=hour["significance"],
-        reflection=hour["reflection"],
-        timezone_name=timezone,
-        card_key=f"night_{idx}"
-    )
+                night_hour_indices = [0, 3, 6, 9]
+                for idx, hour in enumerate(night_hour_details):
+                    start_dt, end_dt = night_hours[night_hour_indices[idx]]
+                    render_watch_card(
+                        watch_name=hour["name"],
+                        watch_start=start_dt,
+                        watch_end=end_dt,
+                        significance=hour["significance"],
+                        reflection=hour["reflection"],
+                        timezone_name=timezone,
+                        card_key=f"night_{idx}"
+                    )
             else:
                 st.error("❌ Could not process prayer times.")
         else:
