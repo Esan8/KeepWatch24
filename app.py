@@ -55,6 +55,7 @@ DAU_END_DATE_STR = MANUAL_END_DATE_STR if MANUAL_END_DATE_STR else datetime.now(
 # ===========================
 # 3. App Constants & Patterns
 # ===========================
+GOOGLE_FORM_EMBED_URL = "https://forms.gle/WNetJA3ZVoX1HeXB7"
 BIBLE_VERSE_PATTERN = re.compile(r'\b([1-3]?\s?[A-Za-z]+)\s(\d{1,3}):(\d{1,3})(?:-(\d{1,3}))?\b', re.IGNORECASE)
 
 # Category pools for distractors and Hangman words
