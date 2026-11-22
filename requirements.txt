@@ -7,3 +7,4 @@ python-dotenv
 geopy
 timezonefinder
 beautifulsoup4
+streamlit-autorefresh
