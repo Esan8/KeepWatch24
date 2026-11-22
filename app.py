@@ -2240,9 +2240,9 @@ def prayer_watch_reminders():
                 ]
 
                 st.subheader("🌞 Day Watches")
+                day_hour_indices = [0, 2, 5, 8]
                 for idx, hour in enumerate(day_hour_details):
-                    start_dt = day_hours[[2, 5, 8, 11][idx]][0]
-                    end_dt = day_hours[[2, 5, 8, 11][idx]][1]
+                    start_dt, end_dt = day_hours[day_hour_indices[idx]]
                     render_watch_card(
                         watch_name=hour["name"],
                         watch_start=start_dt,
