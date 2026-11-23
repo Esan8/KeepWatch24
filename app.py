@@ -14,6 +14,7 @@ import pandas as pd
 import pytz
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -156,29 +157,84 @@ st.markdown(
     background: linear-gradient(145deg, #ffffff, #f9fafb);
     border: 1px solid #e4e4e7;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
 }
 
 .keepwatch-active {
     border: 2px solid #d4af37;
-    background: linear-gradient(135deg, rgba(212, 175, 55, .12), rgba(255, 248, 224, .25));
+    background: linear-gradient(135deg, rgba(212, 175, 55, .14), rgba(255, 248, 224, .32));
+    box-shadow: 0 6px 24px rgba(212, 175, 55, 0.18);
+}
+
+.keepwatch-completed {
+    background: linear-gradient(145deg, #fafafa, #f4f4f5);
+    border: 1px solid #e4e4e7;
+    opacity: 0.88;
+}
+
+.watch-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .watch-title {
     font-size: 1.15rem;
     font-weight: 700;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .watch-time {
-    color: #666;
+    color: #52525b;
     font-size: .95rem;
 }
 
+.watch-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+}
+
+.badge-active {
+    background-color: rgba(212, 175, 55, 0.22);
+    color: #926c06;
+    border: 1px solid #d4af37;
+}
+
+.badge-upcoming {
+    background-color: #eef2ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+.badge-completed {
+    background-color: #f4f4f5;
+    color: #71717a;
+    border: 1px solid #e4e4e7;
+}
+
 .watch-countdown {
-    color: #D4AF37;
     font-size: 1rem;
     font-weight: 700;
-    margin-top: 6px;
+    margin-top: 8px;
+}
+
+.countdown-active {
+    color: #b48608;
+}
+
+.countdown-upcoming {
+    color: #4338ca;
+}
+
+.countdown-completed {
+    color: #71717a;
+    font-weight: 600;
 }
 </style>
 """,
@@ -189,9 +245,10 @@ st.markdown(
 def format_countdown(seconds):
     if seconds <= 0:
         return "00:00"
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = int(seconds % 60)
+    total_secs = int(seconds)
+    hours = total_secs // 3600
+    minutes = (total_secs % 3600) // 60
+    secs = total_secs % 60
     if hours > 0:
         return f"{hours:02}:{minutes:02}:{secs:02}"
     return f"{minutes:02}:{secs:02}"
@@ -205,9 +262,20 @@ def get_location_now(timezone_name):
         return datetime.now(pytz.UTC)
 
 
-def is_watch_active(watch_start, watch_end, timezone_name):
+def get_watch_status(watch_start, watch_end, timezone_name):
     now = get_location_now(timezone_name)
-    return watch_start <= now <= watch_end
+    if watch_start <= now <= watch_end:
+        remaining = max(0, int((watch_end - now).total_seconds()))
+        return "active", remaining
+    if now < watch_start:
+        remaining = max(0, int((watch_start - now).total_seconds()))
+        return "upcoming", remaining
+    return "completed", 0
+
+
+def is_watch_active(watch_start, watch_end, timezone_name):
+    status, _ = get_watch_status(watch_start, watch_end, timezone_name)
+    return status == "active"
 
 
 def get_watch_remaining_seconds(watch_end, timezone_name):
@@ -241,22 +309,91 @@ def telegram_url(text):
 
 
 def render_watch_card(watch_name, watch_start, watch_end, significance, reflection, timezone_name, card_key, location_label=""):
-    active = is_watch_active(watch_start, watch_end, timezone_name)
-    remaining = get_watch_remaining_seconds(watch_end, timezone_name)
-    countdown = format_countdown(remaining)
-    card_class = "keepwatch-card keepwatch-active" if active else "keepwatch-card"
-    countdown_html = f'<div class="watch-countdown">⏳ Ends in {countdown}</div>' if active else ""
+    status, remaining = get_watch_status(watch_start, watch_end, timezone_name)
+    active = status == "active"
+    countdown_str = format_countdown(remaining)
+    timer_dom_id = f"kw_timer_{card_key}"
+
+    if status == "active":
+        card_class = "keepwatch-card keepwatch-active"
+        badge_class = "watch-badge badge-active"
+        badge_label = "Active Now"
+        countdown_class = "watch-countdown countdown-active"
+        prefix_text = "⏳ Ends in "
+    elif status == "upcoming":
+        card_class = "keepwatch-card"
+        badge_class = "watch-badge badge-upcoming"
+        badge_label = "Upcoming"
+        countdown_class = "watch-countdown countdown-upcoming"
+        prefix_text = "⏱️ Starts in "
+    else:
+        card_class = "keepwatch-card keepwatch-completed"
+        badge_class = "watch-badge badge-completed"
+        badge_label = "Completed"
+        countdown_class = "watch-countdown countdown-completed"
+        prefix_text = "✓ Watch Completed"
+
+    if status in ("active", "upcoming"):
+        countdown_html = (
+            f'<div class="{countdown_class}">'
+            f'{prefix_text}<span id="{timer_dom_id}" data-remaining="{remaining}">{countdown_str}</span>'
+            f'</div>'
+        )
+    else:
+        countdown_html = f'<div class="{countdown_class}">{prefix_text}</div>'
 
     st.markdown(
         f"""
         <div class="{card_class}">
-            <div class="watch-title">⏰ {watch_name}</div>
+            <div class="watch-header-row">
+                <div class="watch-title">⏰ {watch_name}</div>
+                <span class="{badge_class}">{badge_label}</span>
+            </div>
             <div class="watch-time">{watch_start.strftime('%I:%M %p')} - {watch_end.strftime('%I:%M %p')}</div>
             {countdown_html}
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    if status in ("active", "upcoming"):
+        components.html(
+            f"""
+            <script>
+            (function() {{
+                const parentDoc = window.parent.document;
+                const el = parentDoc.getElementById("{timer_dom_id}");
+                if (!el) return;
+                let secs = parseInt(el.getAttribute("data-remaining") || "{remaining}", 10);
+                function fmt(s) {{
+                    if (s <= 0) return "00:00";
+                    const h = Math.floor(s / 3600);
+                    const m = Math.floor((s % 3600) / 60);
+                    const sec = s % 60;
+                    const mm = String(m).padStart(2, "0");
+                    const ss = String(sec).padStart(2, "0");
+                    if (h > 0) return String(h).padStart(2, "0") + ":" + mm + ":" + ss;
+                    return mm + ":" + ss;
+                }}
+                el.textContent = fmt(secs);
+                const parentWin = window.parent;
+                parentWin.kwTimerIntervals = parentWin.kwTimerIntervals || {{}};
+                if (parentWin.kwTimerIntervals["{timer_dom_id}"]) {{
+                    clearInterval(parentWin.kwTimerIntervals["{timer_dom_id}"]);
+                }}
+                parentWin.kwTimerIntervals["{timer_dom_id}"] = setInterval(function() {{
+                    if (secs > 0) {{
+                        secs -= 1;
+                        el.textContent = fmt(secs);
+                    }} else {{
+                        clearInterval(parentWin.kwTimerIntervals["{timer_dom_id}"]);
+                    }}
+                }}, 1000);
+            }})();
+            </script>
+            """,
+            height=0,
+        )
 
     with st.expander("📖 View Significance & Reflection", expanded=active):
         st.markdown(f"### 📖 Significance\n\n{link_bible_verses(significance)}")
