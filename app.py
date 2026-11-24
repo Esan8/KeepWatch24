@@ -846,12 +846,21 @@ def bible_word_search():
 # ===========================
 # 8. PRAYER WATCH REMINDERS
 # ===========================
+def _get_solar_boundary(city: str, country: str, day_date: date, field: str):
+    data = fetch_prayer_times_aladhan(city, country, date_obj=day_date)
+    if not data:
+        return None, None
+    tz_name = data["meta"]["timezone"]
+    dt_val = parse_time(data["timings"][field], day_date, tz_name)
+    return dt_val, tz_name
+
+
 def prayer_watch_reminders():
     if st_autorefresh:
         st_autorefresh(interval=5000, key="watch_refresh")
 
     st.title("⏰ Prayer Watch Reminders")
-    st.write("Enter any city and country to receive the Sacred Prayer Watches based on the current date.")
+    st.write("Enter any city and country to receive the Sacred Prayer Watches aligned with the current solar cycle.")
 
     city_input = st.text_input(
         "📍 City Name (e.g., 'Brooklyn' or 'Brooklyn, NY' or 'Paris, France')",
@@ -874,23 +883,57 @@ def prayer_watch_reminders():
 
     if "active_watch_location" in st.session_state:
         active_city, active_country = st.session_state.active_watch_location
-        target_date = datetime.now().date()
-        prayer_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=target_date)
+        today_date = datetime.now().date()
+        today_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=today_date)
 
-        if prayer_data:
-            timings = prayer_data["timings"]
-            timezone_name = prayer_data["meta"]["timezone"]
-            sunrise = parse_time(timings["Sunrise"], target_date, timezone_name)
-            sunset = parse_time(timings["Sunset"], target_date, timezone_name)
+        if today_data:
+            timings = today_data["timings"]
+            timezone_name = today_data["meta"]["timezone"]
+            now_local = get_location_now(timezone_name)
+            today_sunrise = parse_time(timings["Sunrise"], today_date, timezone_name)
+            today_sunset = parse_time(timings["Sunset"], today_date, timezone_name)
 
-            if sunrise and sunset:
-                day_hours, night_hours = calculate_hours(sunrise, sunset)
+            if today_sunrise and today_sunset:
+                if now_local < today_sunrise:
+                    # We are still in the overnight cycle that started yesterday at sunset and ends at today's sunrise
+                    prev_date = today_date - timedelta(days=1)
+                    prev_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=prev_date)
+                    prev_sunrise = (
+                        parse_time(prev_data["timings"]["Sunrise"], prev_date, timezone_name)
+                        if prev_data
+                        else today_sunrise - timedelta(days=1)
+                    )
+                    cycle_sunset = (
+                        parse_time(prev_data["timings"]["Sunset"], prev_date, timezone_name)
+                        if prev_data
+                        else today_sunset - timedelta(days=1)
+                    )
+                    cycle_sunrise = prev_sunrise
+                    cycle_next_sunrise = today_sunrise
+                else:
+                    # Daytime has begun: day cycle is today's sunrise -> today's sunset;
+                    # night cycle is today's sunset -> tomorrow's sunrise
+                    next_date = today_date + timedelta(days=1)
+                    next_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=next_date)
+                    cycle_sunrise = today_sunrise
+                    cycle_sunset = today_sunset
+                    cycle_next_sunrise = (
+                        parse_time(next_data["timings"]["Sunrise"], next_date, timezone_name)
+                        if next_data
+                        else today_sunrise + timedelta(days=1)
+                    )
+
+                day_hours, night_hours = calculate_hours(
+                    cycle_sunrise,
+                    cycle_sunset,
+                    next_sunrise=cycle_next_sunrise,
+                )
                 location_label = f"{active_city}, {active_country}"
 
                 day_watch_slots = [
                     (
-                        night_hours[11][0],
-                        night_hours[11][1],
+                        day_hours[0][0],
+                        day_hours[0][1],
                         "Sunrise Hour",
                         "Rejoice in the new day and commit plans to the LORD (Psalm 5:3).",
                         "Celebrate the dawning of faith and His mercies.",
