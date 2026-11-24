@@ -1,6 +1,5 @@
 from datetime import date, datetime, time, timedelta
 import json
-import math
 import os
 import random
 import re
@@ -847,21 +846,12 @@ def bible_word_search():
 # ===========================
 # 8. PRAYER WATCH REMINDERS
 # ===========================
-def _get_solar_boundary(city: str, country: str, day_date: date, field: str):
-    data = fetch_prayer_times_aladhan(city, country, date_obj=day_date)
-    if not data:
-        return None, None
-    tz_name = data["meta"]["timezone"]
-    dt_val = parse_time(data["timings"][field], day_date, tz_name)
-    return dt_val, tz_name
-
-
 def prayer_watch_reminders():
     if st_autorefresh:
         st_autorefresh(interval=5000, key="watch_refresh")
 
     st.title("⏰ Prayer Watch Reminders")
-    st.write("Enter any city and country to receive the Sacred Prayer Watches aligned with the current solar cycle.")
+    st.write("Enter any city and country to receive the Sacred Prayer Watches based on the current date.")
 
     city_input = st.text_input(
         "📍 City Name (e.g., 'Brooklyn' or 'Brooklyn, NY' or 'Paris, France')",
@@ -884,42 +874,36 @@ def prayer_watch_reminders():
 
     if "active_watch_location" in st.session_state:
         active_city, active_country = st.session_state.active_watch_location
-        probe_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=datetime.now().date())
+        target_date = datetime.now().date()
+        prayer_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=target_date)
 
-        if probe_data:
-            timezone_name = probe_data["meta"]["timezone"]
-            now_local = get_location_now(timezone_name)
-            local_today = now_local.date()
+        if prayer_data:
+            timings = prayer_data["timings"]
+            timezone_name = prayer_data["meta"]["timezone"]
+            sunrise = parse_time(timings["Sunrise"], target_date, timezone_name)
+            sunset = parse_time(timings["Sunset"], target_date, timezone_name)
 
-            today_sunrise, today_sunset, _ = get_precise_solar_times(active_city, active_country, local_today)
-
-            if today_sunrise and today_sunset:
-                if now_local < today_sunrise:
-                    # Overnight cycle that started yesterday at sunset and ends at today's sunrise
-                    prev_date = local_today - timedelta(days=1)
-                    prev_sunrise, prev_sunset, _ = get_precise_solar_times(active_city, active_country, prev_date)
-                    cycle_sunrise = prev_sunrise or (today_sunrise - timedelta(days=1))
-                    cycle_sunset = prev_sunset or (today_sunset - timedelta(days=1))
-                    cycle_next_sunrise = today_sunrise
-                else:
-                    # Daytime/evening cycle: today's sunrise -> today's sunset -> tomorrow's sunrise
-                    next_date = local_today + timedelta(days=1)
-                    next_sunrise, _, _ = get_precise_solar_times(active_city, active_country, next_date)
-                    cycle_sunrise = today_sunrise
-                    cycle_sunset = today_sunset
-                    cycle_next_sunrise = next_sunrise or (today_sunrise + timedelta(days=1))
-
-                day_hours, night_hours = calculate_hours(
-                    cycle_sunrise,
-                    cycle_sunset,
-                    next_sunrise=cycle_next_sunrise,
+            if sunrise and sunset:
+                prev_date = target_date - timedelta(days=1)
+                prev_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=prev_date)
+                prev_sunset = (
+                    parse_time(prev_data["timings"]["Sunset"], prev_date, timezone_name)
+                    if prev_data
+                    else (sunset - timedelta(days=1) if sunset >= sunrise else sunset)
                 )
+                if prev_sunset and prev_sunset >= sunrise:
+                    prev_sunset = prev_sunset - timedelta(days=1)
+                pre_sunrise_step = (sunrise - prev_sunset) / 12 if prev_sunset else timedelta(minutes=48)
+                sunrise_hour_start = sunrise - pre_sunrise_step
+                sunrise_hour_end = sunrise
+
+                day_hours, night_hours = calculate_hours(sunrise, sunset)
                 location_label = f"{active_city}, {active_country}"
 
                 day_watch_slots = [
                     (
-                        day_hours[0][0],
-                        day_hours[0][1],
+                        sunrise_hour_start,
+                        sunrise_hour_end,
                         "Sunrise Hour",
                         "Rejoice in the new day and commit plans to the LORD (Psalm 5:3).",
                         "Celebrate the dawning of faith and His mercies.",
@@ -1033,101 +1017,6 @@ def link_bible_verses(text, version="BSB"):
 # ===========================
 # 9. PRAYER TIME CALCULATION
 # ===========================
-@st.cache_data(ttl=86400, show_spinner=False)
-def geocode_city_country(city: str, country: str):
-    headers = {"User-Agent": "KeepWatch/1.0"}
-    try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": f"{city}, {country}", "format": "json", "limit": 1},
-            headers=headers,
-            timeout=10,
-        )
-        if resp.status_code == 200 and resp.json():
-            item = resp.json()[0]
-            return float(item["lat"]), float(item["lon"])
-    except Exception:
-        pass
-    return None, None
-
-
-def calculate_exact_sunrise_sunset(
-    target_date: date,
-    lat: float,
-    lon: float,
-    timezone_str: str,
-    zenith: float = 90.833,
-):
-    tz = pytz.timezone(timezone_str)
-    noon_local = tz.localize(datetime.combine(target_date, time(12, 0, 0)))
-    utc_offset_hours = noon_local.utcoffset().total_seconds() / 3600.0
-    n = target_date.timetuple().tm_yday
-
-    def _calc_event(is_sunrise: bool) -> datetime:
-        lng_hour = lon / 15.0
-        t = n + ((6.0 - lng_hour) / 24.0) if is_sunrise else n + ((18.0 - lng_hour) / 24.0)
-
-        m = (0.9856 * t) - 3.289
-        l = m + (1.916 * math.sin(math.radians(m))) + (0.020 * math.sin(math.radians(2 * m))) + 282.634
-        l = l % 360.0
-
-        ra = math.degrees(math.atan(0.91764 * math.tan(math.radians(l))))
-        ra = ra % 360.0
-        l_quadrant = math.floor(l / 90.0) * 90.0
-        ra_quadrant = math.floor(ra / 90.0) * 90.0
-        ra = (ra + (l_quadrant - ra_quadrant)) / 15.0
-
-        sin_dec = 0.39782 * math.sin(math.radians(l))
-        cos_dec = math.cos(math.asin(sin_dec))
-
-        cos_h = (
-            math.cos(math.radians(zenith)) - (sin_dec * math.sin(math.radians(lat)))
-        ) / (cos_dec * math.cos(math.radians(lat)))
-
-        if cos_h > 1.0 or cos_h < -1.0:
-            raise ValueError("Polar day/night boundary reached.")
-
-        h_deg = (360.0 - math.degrees(math.acos(cos_h))) if is_sunrise else math.degrees(math.acos(cos_h))
-        h_hours = h_deg / 15.0
-
-        local_t = h_hours + ra - (0.06571 * t) - 6.622
-        ut_hours = (local_t - lng_hour) % 24.0
-        local_hours = (ut_hours + utc_offset_hours) % 24.0
-
-        total_seconds = int(round(local_hours * 3600)) % 86400
-        hr = total_seconds // 3600
-        mn = (total_seconds % 3600) // 60
-        sec = total_seconds % 60
-
-        return tz.localize(datetime.combine(target_date, time(hr, mn, sec)))
-
-    return _calc_event(True), _calc_event(False)
-
-
-def get_precise_solar_times(city: str, country: str, target_date: date):
-    prayer_data = fetch_prayer_times_aladhan(city, country, date_obj=target_date)
-    if not prayer_data:
-        return None, None, None
-
-    timezone_name = prayer_data["meta"]["timezone"]
-    lat = prayer_data["meta"].get("latitude")
-    lon = prayer_data["meta"].get("longitude")
-
-    if lat is None or lon is None:
-        lat, lon = geocode_city_country(city, country)
-
-    if lat is not None and lon is not None:
-        try:
-            sr, ss = calculate_exact_sunrise_sunset(target_date, float(lat), float(lon), timezone_name)
-            return sr, ss, timezone_name
-        except ValueError:
-            pass
-
-    sr = parse_time(prayer_data["timings"]["Sunrise"], target_date, timezone_name)
-    ss = parse_time(prayer_data["timings"]["Sunset"], target_date, timezone_name)
-    return sr, ss, timezone_name
-
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_prayer_times_aladhan(city, country, method=2, date_obj=None):
     date_str = date_obj.strftime("%d-%m-%Y") if date_obj else datetime.now().strftime("%d-%m-%Y")
