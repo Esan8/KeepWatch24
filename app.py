@@ -874,17 +874,30 @@ def prayer_watch_reminders():
 
     if "active_watch_location" in st.session_state:
         active_city, active_country = st.session_state.active_watch_location
-        target_date = datetime.now().date()
-        prayer_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=target_date)
+        probe_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=datetime.now().date())
+
+        if probe_data:
+            timezone_name = probe_data["meta"]["timezone"]
+            now_local = get_location_now(timezone_name)
+            local_today = now_local.date()
+            prayer_data = (
+                probe_data
+                if local_today == datetime.now().date()
+                else fetch_prayer_times_aladhan(active_city, active_country, date_obj=local_today)
+            )
+        else:
+            prayer_data = None
+            timezone_name = None
+            now_local = None
+            local_today = None
 
         if prayer_data:
             timings = prayer_data["timings"]
-            timezone_name = prayer_data["meta"]["timezone"]
-            sunrise = parse_time(timings["Sunrise"], target_date, timezone_name)
-            sunset = parse_time(timings["Sunset"], target_date, timezone_name)
+            sunrise = parse_time(timings["Sunrise"], local_today, timezone_name)
+            sunset = parse_time(timings["Sunset"], local_today, timezone_name)
 
             if sunrise and sunset:
-                prev_date = target_date - timedelta(days=1)
+                prev_date = local_today - timedelta(days=1)
                 prev_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=prev_date)
                 prev_sunset = (
                     parse_time(prev_data["timings"]["Sunset"], prev_date, timezone_name)
@@ -897,7 +910,30 @@ def prayer_watch_reminders():
                 sunrise_hour_start = sunrise - pre_sunrise_step
                 sunrise_hour_end = sunrise
 
-                day_hours, night_hours = calculate_hours(sunrise, sunset)
+                day_hours, _ = calculate_hours(sunrise, sunset)
+
+                if now_local < sunrise:
+                    night_start = prev_sunset or (sunset - timedelta(days=1))
+                    night_end = sunrise
+                else:
+                    next_date = local_today + timedelta(days=1)
+                    next_data = fetch_prayer_times_aladhan(active_city, active_country, date_obj=next_date)
+                    next_sunrise = (
+                        parse_time(next_data["timings"]["Sunrise"], next_date, timezone_name)
+                        if next_data
+                        else (sunrise + timedelta(days=1))
+                    )
+                    night_start = sunset
+                    night_end = next_sunrise or (sunrise + timedelta(days=1))
+
+                if night_end <= night_start:
+                    night_end = night_start + timedelta(hours=12)
+
+                night_step = (night_end - night_start) / 12
+                night_hours = [
+                    (night_start + night_step * i, night_start + night_step * (i + 1))
+                    for i in range(12)
+                ]
                 location_label = f"{active_city}, {active_country}"
 
                 day_watch_slots = [
